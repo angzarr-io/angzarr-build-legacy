@@ -20,7 +20,7 @@ Every angzarr pin in `Cargo.toml` is a full commit, and they move together:
 
 - angzarr core (`angzarr-diagnostic`, `angzarr-proto`, `angzarr-test-dir`,
   and for the tests `angzarr-presentation`): f6fed5e53c1d17bf7d7c23c98a7b4a7df972a47e
-- angzarr-embedded (`angzarr-embedded-host-config`): 94f630a38f5fc79657fb09bbc73f7def27d31335
+- angzarr-embedded (`angzarr-embedded-host-config`): 5cee822bf063a6e070545d14c0ec0caf387022f3
 
 The spec submodule `angzarr-project` is the codegen tier's feature files
 (`crates/angzarr-codegen/tests/spec.rs`); `git submodule update --init`
