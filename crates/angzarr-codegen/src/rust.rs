@@ -587,8 +587,9 @@ fn refusal_choice(input: &crate::model::Input) -> TokenStream {
 }
 
 /// The `BusinessStatus` variant of a `refusal_status` number (a
-/// `google.rpc.Code`, decision 14.52); unmarked, or a number outside the
-/// business set, FAILED_PRECONDITION.
+/// `google.rpc.Code`, decision 14.52): a business-fatal status, or ABORTED
+/// (decision 14.111); unmarked, or a number outside that set,
+/// FAILED_PRECONDITION.
 fn business_status(code: i32) -> syn::Ident {
     format_ident!(
         "{}",
@@ -597,6 +598,7 @@ fn business_status(code: i32) -> syn::Ident {
             5 => "NotFound",
             6 => "AlreadyExists",
             7 => "PermissionDenied",
+            10 => "Aborted",
             11 => "OutOfRange",
             _ => "FailedPrecondition",
         }
