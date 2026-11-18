@@ -20,6 +20,7 @@ message Try {
     refuses: "statuses.v1.Taken"
     refuses: "statuses.v1.Forbidden"
     refuses: "statuses.v1.NotReady"
+    refuses: "statuses.v1.Stale"
   };
 }
 
@@ -45,4 +46,8 @@ message Forbidden {
 
 message NotReady {
   option (io.angzarr.v1.refusal_status) = REFUSAL_STATUS_FAILED_PRECONDITION;
+}
+
+message Stale {
+  option (io.angzarr.v1.refusal_status) = REFUSAL_STATUS_ABORTED;
 }

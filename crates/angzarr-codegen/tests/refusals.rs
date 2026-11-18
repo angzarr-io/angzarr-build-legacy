@@ -203,6 +203,7 @@ fn test_each_declared_status_is_the_business_status_of_its_name() {
         ("Taken", "AlreadyExists"),
         ("Forbidden", "PermissionDenied"),
         ("NotReady", "FailedPrecondition"),
+        ("Stale", "Aborted"),
     ] {
         let expected = format!(
             "implRefusalfor{refusal}{{constREFUSAL_STATUS:BusinessStatus=BusinessStatus::{status};}}"

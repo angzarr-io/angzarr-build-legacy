@@ -1052,7 +1052,8 @@ fn test_a_callback_returns_a_choice_of_the_sources_facts() {
 
 /// A refusal is refused under the status its message declares
 /// (`(refusal_status)`, decision 14.95; there is no default), one number
-/// each of the six business statuses (`google.rpc.Code`).
+/// each of the six business-fatal statuses and ABORTED (decision 14.111;
+/// `google.rpc.Code`).
 #[test]
 fn test_a_refusal_is_refused_under_the_status_its_message_declares() {
     let files = scaffold_python(&descriptors(STATUSES), STATUSES, &app("gate")).unwrap();
@@ -1065,6 +1066,7 @@ fn test_a_refusal_is_refused_under_the_status_its_message_declares() {
          assert Taken().status() == 6\n\
          assert Forbidden().status() == 7\n\
          assert NotReady().status() == 9\n\
+         assert Stale().status() == 10\n\
          print('ok')\n",
     );
     assert!(
