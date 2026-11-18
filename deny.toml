@@ -13,7 +13,14 @@ all-features = true
 version = 2
 # RustSec advisories. An ignore needs the advisory id and why it does not
 # apply here.
-ignore = []
+# RUSTSEC-2026-0542: humantime is unmaintained (it wraps chrono, also
+# unmaintained); not a vulnerability. It reaches the graph only through
+# cucumber, angzarr-codegen's dev-dependency (the spec tier's runner), and
+# every cucumber release (0.21 to 0.23) depends on it. Delete this ignore
+# when cucumber drops humantime.
+ignore = [
+  { id = "RUSTSEC-2026-0542", reason = "unmaintained, not vulnerable; only through cucumber, a test-only dev-dependency; no cucumber release avoids it" },
+]
 
 [licenses]
 version = 2
