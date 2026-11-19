@@ -111,10 +111,10 @@ fn test_scaffold_matches_the_golden_files() {
 fn test_the_interfaces_are_the_domain_layers() {
     let layer = buyin_layer();
     for name in [
-        "BuyInState",
-        "WalletState",
-        "BuyInWalletPolicy",
-        "WalletBuyInPolicy",
+        "BuyInStateInterface",
+        "WalletStateInterface",
+        "BuyInWalletPolicyInterface",
+        "WalletBuyInPolicyInterface",
     ] {
         assert!(
             layer.contains(&format!("pub trait {name} {{")),
@@ -165,6 +165,13 @@ fn test_the_users_files_import_nothing_from_the_runtime_directly() {
     }
 }
 
+/// An aggregate's snapshot methods, which its interface offers and does
+/// not require: reported optional where its scaffold's configuration
+/// selects neither.
+fn snapshots() -> Vec<String> {
+    ["snapshot", "restore"].map(String::from).to_vec()
+}
+
 /// `text` without whitespace, and without the trailing comma rustfmt puts
 /// before a closing parenthesis: signatures compare whatever way they wrap.
 fn flat(text: &str) -> String {
@@ -174,7 +181,7 @@ fn flat(text: &str) -> String {
 /// The interface of the policy `name`, from its trait to the next.
 fn policy_trait<'a>(source: &'a str, name: &str) -> &'a str {
     let start = source
-        .find(&format!("pub trait {name} {{"))
+        .find(&format!("pub trait {name}Interface {{"))
         .unwrap_or_else(|| panic!("no trait {name}:\n{source}"));
     let rest = &source[start..];
     &rest[..rest.find("\n}\n").map_or(rest.len(), |end| end + 3)]
@@ -313,7 +320,7 @@ fn test_a_target_that_cannot_refuse_has_no_refusal_choice_or_callback() {
     const UNREFUSED: &[&str] = &["unrefused/v1/unrefused.proto"];
     let source = layer(UNREFUSED, "unrefused.v1");
     assert!(
-        source.contains("pub trait OrderToInventoryPolicy {"),
+        source.contains("pub trait OrderToInventoryPolicyInterface {"),
         "{source}"
     );
     assert!(!source.contains("StateRefusal"), "{source}");
@@ -345,7 +352,7 @@ fn test_an_interface_of_one_file_finds_its_policies_owners_and_events_elsewhere(
     let files = scaffold(&descriptors(BLACKJACK), &[POLICIES]).unwrap();
     file_at(&files, "player_table_policy_impl.rs");
     let source = layer(BLACKJACK, "io.angzarr.examples.v1");
-    let player_table = &source[source.find("pub trait PlayerTablePolicy").unwrap()..];
+    let player_table = &source[source.find("pub trait PlayerTablePolicyInterface").unwrap()..];
     assert!(player_table.contains("fn move_decided("), "{player_table}");
     // What it sends the table: its outputs, commands and facts alike
     // (decision 14.69).
@@ -356,7 +363,7 @@ fn test_an_interface_of_one_file_finds_its_policies_owners_and_events_elsewhere(
 fn test_a_decision_returns_a_list_of_its_events() {
     const TABLE: &str = "io/angzarr/examples/v1/table.proto";
     let source = layer(BLACKJACK, "io.angzarr.examples.v1");
-    let table = &source[source.find("pub trait TableState").unwrap()..];
+    let table = &source[source.find("pub trait TableStateInterface").unwrap()..];
     // Decision 14.75: every handling returns a list of the table's events
     // (C-0797), and the table refuses with the choice of its command's refusal types.
     for expected in [
@@ -437,7 +444,7 @@ fn test_adapters_wire_the_one_translating_refusal_callback() {
     assert_eq!(
         text(&callback.block),
         "{let(command,refusal)=WalletStateRefusal::read(refused)?;\
-         crate::domain::BuyInWalletPolicy::refused(&self.0,command,refusal,refused)}"
+         crate::domain::BuyInWalletPolicyInterface::refused(&self.0,command,refusal,refused,)}"
     );
     // The wallet's policy to the buy-in: its own one callback.
     let other = inherent_impl(&file, "WalletBuyInPolicy");
@@ -496,7 +503,7 @@ fn test_adapters_forward_a_fact_handlers_context() {
         .expect("the HoldLost handler");
     assert_eq!(
         text(&fact.block),
-        "{crate::domain::BuyInState::hold_lost(&self.0,&fact,ctx).map(Self::recorded).map_err(::angzarr_embedded::markup::Bug::from)}"
+        "{crate::domain::BuyInStateInterface::hold_lost(&self.0,&fact,ctx).map(Self::recorded).map_err(::angzarr_embedded::markup::Bug::from)}"
     );
     assert_eq!(
         text(&fact.sig.output),
@@ -562,7 +569,7 @@ fn test_adapters_forward_each_handlers_context() {
     let wallet = inherent_impl(&file, "WalletState");
     assert_eq!(
         text(&methods(wallet)[0].block),
-        "{crate::domain::WalletState::deposit(&self.0,&cmd,ctx).map(Self::emitted::<Failed<Refuses<Self,Deposit>>>).map_err(DepositRefused::with_declared_status).map_err(Failed::widen)}"
+        "{crate::domain::WalletStateInterface::deposit(&self.0,&cmd,ctx).map(Self::emitted::<Failed<Refuses<Self,Deposit>>>).map_err(DepositRefused::with_declared_status).map_err(Failed::widen)}"
     );
     let policy = inherent_impl(&file, "BuyInWalletPolicy");
     let reaction = methods(policy)[0];
@@ -572,7 +579,7 @@ fn test_adapters_forward_each_handlers_context() {
     );
     assert!(
         text(&reaction.block).starts_with(
-            "{letorders=crate::domain::BuyInWalletPolicy::buy_in_started(&self.0,&ctx.source_root().value,event,ctx,)?;"
+            "{letorders=crate::domain::BuyInWalletPolicyInterface::buy_in_started(&self.0,&ctx.source_root().value,event,ctx,)?;"
         ),
         "{}",
         text(&reaction.block)
@@ -744,7 +751,7 @@ pub struct WalletStateImpl {
     pub state: crate::wire::WalletState,
 }
 
-impl WalletState for WalletStateImpl {
+impl WalletStateInterface for WalletStateImpl {
     /// The user's own doc, which `--missing` must keep byte for byte.
     fn deposit(&self, cmd: &Deposit, _ctx: &Context) -> Result<Vec<WalletStateEvent>, Failed<DepositRefused>> {
         Ok(vec![Deposited { cents: cmd.cents }.into()]) // USER-WRITTEN
@@ -786,6 +793,7 @@ fn test_complete_adds_only_the_absent_required_methods_to_the_implementation() {
         completion.notes,
         Notes {
             obsolete: vec!["withdraw".to_string()],
+            optional: snapshots(),
             ..Notes::default()
         }
     );
@@ -808,6 +816,7 @@ fn test_complete_of_a_kept_file_reports_what_it_lacks_and_what_is_obsolete() {
         Notes {
             lacks: vec!["hold".to_string(), "apply_held".to_string()],
             obsolete: vec!["withdraw".to_string()],
+            optional: snapshots(),
             ..Notes::default()
         }
     );

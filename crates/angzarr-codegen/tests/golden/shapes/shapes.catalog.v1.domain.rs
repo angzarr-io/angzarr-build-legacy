@@ -261,6 +261,9 @@ pub use ::angzarr_embedded::markup::Compensation;
 pub use ::angzarr_embedded::markup::{
     BusinessStatus, Failed, RetryableStatus, Unrefusable,
 };
+/// Why an aggregate's or a process manager's `restore` refuses a
+/// snapshot: a diagnostic key and its args, never text.
+pub use ::angzarr_embedded::markup::Report;
 /// A typed refusal message: the status it is refused under, the
 /// `(refusal_status)` its message declares (there is no default).
 /// Every refusal message of the domain layer implements it; a
@@ -575,6 +578,11 @@ impl ::angzarr_embedded::markup::DomainMessage for ItemListed {
 ///
 /// Each handler takes its input and its `Context`; each `apply_` folds an
 /// event.
+///
+/// `snapshot` and `restore` are its snapshots, its state as the anchor's domain
+/// type, which angzarr-embedded stores as the anchor's wire type and resumes a
+/// fresh implementation from (`markup::Snapshots`). Their defaults take none;
+/// overriding both opts in.
 #[allow(clippy::result_large_err)]
 pub trait CatalogStateInterface {
     fn list_item(
@@ -584,4 +592,15 @@ pub trait CatalogStateInterface {
     ) -> Result<Vec<CatalogStateEvent>, Failed<ItemRefused>>;
 
     fn apply_item_listed(&mut self, event: &ItemListed);
+
+    fn snapshot(&self) -> Option<CatalogState> {
+        None
+    }
+
+    fn restore(&mut self, state: CatalogState) -> Result<(), Report> {
+        let _ = state;
+        Err(Report::of(&::angzarr_embedded::NotSnapshotted::of::<
+            <CatalogState as ::angzarr_embedded::markup::DomainMessage>::Wire,
+        >()))
+    }
 }

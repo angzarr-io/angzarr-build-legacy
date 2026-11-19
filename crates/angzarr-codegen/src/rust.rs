@@ -179,14 +179,16 @@ pub(crate) fn markup_package(package: &Package, name: &str, paths: &Paths) -> St
     out
 }
 
-/// The `DomainMessage` impl of every state anchor, input, refusal and
-/// event of the package's components, each once.
+/// The `DomainMessage` impl of every aggregate's and process manager's
+/// anchor, and every input, refusal and event of the package's
+/// components, each once.
 fn domain_messages(package: &Package, at: &Layer) -> TokenStream {
     let mut items = TokenStream::new();
     let mut messages: Vec<&MessageDescriptor> = Vec::new();
     for component in &package.components {
         let declared = component
-            .state
+            .kind
+            .is_domain()
             .then_some(&component.anchor)
             .into_iter()
             .chain(
@@ -401,6 +403,10 @@ fn handler_context() -> TokenStream {
         /// `command_id`); `ResourceExhausted` means wait longer before
         /// resending (a quota or a capacity limit was hit).
         pub use #root::markup::{BusinessStatus, Failed, RetryableStatus, Unrefusable};
+
+        /// Why an aggregate's or a process manager's `restore` refuses a
+        /// snapshot: a diagnostic key and its args, never text.
+        pub use #root::markup::Report;
 
         /// A typed refusal message: the status it is refused under, the
         /// `(refusal_status)` its message declares (there is no default).
@@ -1037,6 +1043,11 @@ fn id_types(package: &Package) -> TokenStream {
         seen.push(id);
     }
     items
+}
+
+/// Whether `message`'s domain type has a `Default` ([`defaultable`]).
+pub(crate) fn has_default(message: &MessageDescriptor) -> bool {
+    defaultable(message, &mut Vec::new())
 }
 
 /// Whether every field of `message` has a `Default`, so its domain type

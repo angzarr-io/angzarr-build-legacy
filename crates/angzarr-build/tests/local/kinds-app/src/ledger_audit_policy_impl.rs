@@ -1,4 +1,4 @@
-//! LedgerAuditPolicyImpl: the implementation of `LedgerAuditPolicy`, the generated domain layer's
+//! LedgerAuditPolicyImpl: the implementation of `LedgerAuditPolicyInterface`, the generated domain layer's
 //! interface, written once by `angzarr scaffold rust` and yours from then on:
 //! `--missing` adds the required methods it lacks, each `todo!()`.
 
@@ -7,7 +7,7 @@ use crate::domain::*;
 #[derive(Clone, Debug, Default)]
 pub struct LedgerAuditPolicyImpl;
 
-impl LedgerAuditPolicy for LedgerAuditPolicyImpl {
+impl LedgerAuditPolicyInterface for LedgerAuditPolicyImpl {
     /// Audits the ledger's root.
     fn noted(
         &self,

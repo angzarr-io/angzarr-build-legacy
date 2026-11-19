@@ -4,7 +4,9 @@
 //!
 //! - the user's, written once into the source tree by `angzarr scaffold
 //!   rust`: per component its implementation (`<component>_impl.rs`, every
-//!   body `todo!()`) of the component's interface, importing nothing of
+//!   body `todo!()` but the `snapshot` and `restore` its configuration
+//!   selects ([`ScaffoldConfig`]), which take snapshots of the state it
+//!   holds) of the component's interface, importing nothing of
 //!   angzarr-embedded directly: their context types, `Failed`,
 //!   `BusinessStatus`, `RetryableStatus`, `Compensation` and `Bug` are the
 //!   generated domain layer's re-exports and its own
@@ -132,21 +134,59 @@ pub struct PinDrift {
 /// A policy is scaffolded when an aggregate or a process manager of the
 /// descriptor set owns each of its `input_domain` and `output_domain`.
 pub fn scaffold(descriptor_set: &[u8], files: &[&str]) -> Result<Vec<ScaffoldFile>, CodegenError> {
-    scaffold_with(descriptor_set, files, &[], &[])
+    scaffold_with(descriptor_set, files, &[], &[], &ScaffoldConfig::default())
+}
+
+/// What the scaffold writes beyond each component's required methods, per
+/// component: the host config's (`angzarr.yaml`) `component` entries'
+/// `scaffold` ([`host_scaffold`](crate::host_scaffold)).
+///
+/// ```yaml
+/// component:
+///   - name: orders
+///     kind: domain
+///     language: rust
+///     scaffold:
+///       snapshots: true
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScaffoldConfig {
+    /// The aggregates and process managers, by component name
+    /// (`ComponentOptions.component_name`), whose implementation the
+    /// scaffold writes taking snapshots: overriding the interface's
+    /// `snapshot` and `restore` (angzarr-embedded's `markup::Snapshots`),
+    /// over the state it holds. Every other one keeps the interface's
+    /// defaults and takes none; its implementation may override them
+    /// later all the same, and `--missing` offers them.
+    pub snapshots: Vec<String>,
 }
 
 /// [`scaffold`], each component's implementation importing its package's
 /// domain layer at the Rust path `domain` names for it, and holding a wire
 /// state at the path `wire` names (`crate::domain` and `crate::wire` for a
-/// package neither names), as [`markup_domain_with`] places them.
+/// package neither names), as [`markup_domain_with`] places them, and
+/// written as `config` says. A component `config` names that `files`
+/// declare as a policy or a projector is refused
+/// ([`UseError::ScaffoldNoComponent`]); one they do not declare is
+/// another crate's, and left to it.
 pub fn scaffold_with(
     descriptor_set: &[u8],
     files: &[&str],
     wire: &[(&str, &str)],
     domain: &[(&str, &str)],
+    config: &ScaffoldConfig,
 ) -> Result<Vec<ScaffoldFile>, CodegenError> {
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     let pool = model::pool_components(descriptor_set)?;
+    if let Some(stateless) = components
+        .iter()
+        .find(|c| !c.kind.is_domain() && config.snapshots.contains(&c.component_name))
+    {
+        return Err(UseError::ScaffoldNoComponent {
+            component: stateless.component_name.clone(),
+        }
+        .into());
+    }
     let mut out = Vec::new();
     for component in &components {
         if component.kind == ComponentKind::Policy && !component.is_connected(&pool) {
@@ -155,19 +195,30 @@ pub fn scaffold_with(
         let stem = snake(&component.name);
         let anchor = component.anchor.full_name().to_string();
         let methods = interface_methods(component, &pool)?;
-        let stubs: Vec<&Method> = methods.iter().collect();
+        let selected = false;
+        let stubs: Vec<&Method> = methods
+            .iter()
+            .filter(|m| m.default.is_none() || selected)
+            .collect();
         out.push(ScaffoldFile::new(
             anchor.clone(),
             format!("{stem}.rs"),
             String::new(),
             Owner::Obsolete,
         ));
-        out.push(ScaffoldFile::new(
+        let mut implementation = ScaffoldFile::new(
             anchor,
             format!("{stem}_impl.rs"),
             impl_source(component, &stubs, wire, domain),
             Owner::User,
-        ));
+        );
+        if component.kind.is_domain() {
+            implementation.optional = SNAPSHOT_METHODS.map(String::from).to_vec();
+            if selected {
+                implementation.selected = implementation.optional.clone();
+            }
+        }
+        out.push(implementation);
     }
     Ok(crate::headed_files(out))
 }
@@ -187,6 +238,14 @@ struct Method {
     /// Whether this is a policy's one refusal callback. Every method is
     /// required.
     refused: bool,
+    /// The implementation's body, when the scaffold can write it over the
+    /// anchor's domain type it holds: `snapshot`'s and `restore`'s. Else
+    /// `todo!()`.
+    body: Option<&'static str>,
+    /// The interface's default body, for a method it does not require:
+    /// `snapshot`'s and `restore`'s, which take no snapshot. The scaffold
+    /// writes such a method only where its configuration selects it.
+    default: Option<String>,
 }
 
 impl Method {
@@ -277,6 +336,8 @@ fn projector_methods(component: &Component) -> Vec<Method> {
         returns: Some("Result<(), Bug>".to_string()),
         asynchronous: true,
         refused: false,
+        body: None,
+        default: None,
     });
     projections.collect()
 }
@@ -305,6 +366,8 @@ fn policy_methods(component: &Component, pool: &[Component]) -> Result<Vec<Metho
         )),
         asynchronous: false,
         refused: false,
+        body: None,
+        default: None,
     });
     let choice = owner(pool, &component.input_domain).and_then(fact_choice);
     let callback = choice
@@ -320,6 +383,8 @@ fn policy_methods(component: &Component, pool: &[Component]) -> Result<Vec<Metho
             returns: Some(format!("Result<{fact}, Bug>")),
             asynchronous: false,
             refused: true,
+            body: None,
+            default: None,
         });
     Ok(reactions.chain(callback).collect())
 }
@@ -344,7 +409,8 @@ pub(crate) fn refusal_choice(domain: &Component) -> Option<String> {
 }
 
 /// An aggregate's or a process manager's interface: a decision per command,
-/// a record per fact, and a fold per event.
+/// a record per fact, and a fold per event; then its snapshots
+/// ([`snapshot_methods`]).
 fn domain_methods(component: &Component) -> Vec<Method> {
     let decisions = component.inputs.iter().map(|input| {
         let ty = input.message.name();
@@ -362,6 +428,8 @@ fn domain_methods(component: &Component) -> Vec<Method> {
             returns: Some(returns),
             asynchronous: false,
             refused: false,
+            body: None,
+            default: None,
         }
     });
     let folds = component.events.iter().map(|event| Method {
@@ -371,8 +439,54 @@ fn domain_methods(component: &Component) -> Vec<Method> {
         returns: None,
         asynchronous: false,
         refused: false,
+        body: None,
+        default: None,
     });
-    decisions.chain(folds).collect()
+    decisions
+        .chain(folds)
+        .chain(snapshot_methods(component))
+        .collect()
+}
+
+/// The names of an aggregate's or a process manager's snapshot methods:
+/// what its interface does not require, and its scaffold's configuration
+/// selects.
+const SNAPSHOT_METHODS: [&str; 2] = ["snapshot", "restore"];
+
+/// An aggregate's or a process manager's snapshots, over its anchor's
+/// domain type (its state): `snapshot` and `restore`, which angzarr-embedded's
+/// `markup::Snapshots` mirrors and its adapter delegates to. The interface's
+/// defaults take none; an implementation overriding both opts in. The
+/// scaffold, where its configuration selects them, writes them over the
+/// state it holds.
+fn snapshot_methods(component: &Component) -> Vec<Method> {
+    let state = &component.name;
+    let root = crate::rust::RUNTIME;
+    vec![
+        Method {
+            name: "snapshot".to_string(),
+            receiver: "&self",
+            params: Vec::new(),
+            returns: Some(format!("Option<{state}>")),
+            asynchronous: false,
+            refused: false,
+            body: Some("Some(self.state.clone())"),
+            default: Some("None".to_string()),
+        },
+        Method {
+            name: "restore".to_string(),
+            receiver: "&mut self",
+            params: vec![param("state", state.as_str())],
+            returns: Some("Result<(), Report>".to_string()),
+            asynchronous: false,
+            refused: false,
+            body: Some("self.state = state;\n        Ok(())"),
+            default: Some(format!(
+                "let _ = state;\n        Err(Report::of(&::{root}::NotSnapshotted::of::<\n            \
+                 <{state} as ::{root}::markup::DomainMessage>::Wire,\n        >()))"
+            )),
+        },
+    ]
 }
 
 /// A component's interface, as the domain layer declares it: a trait over
@@ -406,8 +520,16 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
          once), and the generated adapter (`adapters::{name}`) carries the markup and \
          calls it."
     );
+    let state = "`snapshot` and `restore` are its snapshots, its state as the anchor's \
+                 domain type, which angzarr-embedded stores as the anchor's wire type and \
+                 resumes a fresh implementation from (`markup::Snapshots`). Their defaults \
+                 take none; overriding both opts in.";
+    let mut paragraphs = vec![head.as_str(), what];
+    if component.kind.is_domain() {
+        paragraphs.push(state);
+    }
     let mut out = String::new();
-    for (i, paragraph) in [head.as_str(), what].iter().enumerate() {
+    for (i, paragraph) in paragraphs.iter().enumerate() {
         if i > 0 {
             out.push_str("///\n");
         }
@@ -422,13 +544,25 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
     ));
     let body: Vec<String> = methods
         .iter()
-        .map(|m| format!("{}\n", m.signature("", ";", false)))
+        .map(|m| match &m.default {
+            Some(default) => format!(
+                "{}\n        {default}\n    }}\n",
+                m.signature("", " {", false)
+            ),
+            None => format!("{}\n", m.signature("", ";", false)),
+        })
         .collect();
     out.push_str(&body.join("\n"));
     out.push_str("}\n");
     out
 }
 
+/// A component's implementation, as the scaffold writes it: `methods`, its
+/// interface's required methods and the ones its configuration selects,
+/// over the state it holds. An aggregate's or a process manager's state is
+/// its anchor's domain type where that type has a `Default`, so a selected
+/// `snapshot` and `restore` clone and assign it; else the anchor's wire
+/// type, and their bodies, like every other, are `todo!()`.
 fn impl_source(
     component: &Component,
     methods: &[&Method],
@@ -442,10 +576,17 @@ fn impl_source(
         rust_path(wire, package, WIRE),
         rust_path(domain, package, DOMAIN),
     );
+    let held = component.kind.is_domain() && crate::rust::has_default(&component.anchor);
+    let written = |m: &Method| m.body.filter(|_| held);
+    let stubs = if methods.iter().any(|m| written(m).is_some()) {
+        "each `todo!()` but\n//! `snapshot` and `restore`, which take snapshots of `state`"
+    } else {
+        "each `todo!()`"
+    };
     let mut out = format!(
         "//! {name}Impl: the implementation of `{interface}`, the generated domain layer's\n\
          //! interface, written once by `angzarr scaffold rust` and yours from then on:\n\
-         //! `--missing` adds the required methods it lacks, each `todo!()`.\n\n"
+         //! `--missing` adds the required methods it lacks, {stubs}.\n\n"
     );
     out.push_str(&format!("use {domain}::*;\n\n"));
     if component.kind == ComponentKind::Policy {
@@ -459,7 +600,7 @@ fn impl_source(
              pub struct {name}Impl {{\n    pub state: {wire}::{},\n}}\n\n",
             component.anchor.name()
         ));
-    } else if component.state {
+    } else if held {
         out.push_str(&format!(
             "/// The state the `apply_` methods fold: the anchor's domain type.\n\
              #[derive(Clone, Debug, Default)]\n\
@@ -467,7 +608,8 @@ fn impl_source(
         ));
     } else {
         out.push_str(&format!(
-            "/// The state the `apply_` methods fold.\n\
+            "/// The state the `apply_` methods fold: the anchor's wire type, as its\n\
+             /// domain type has no `Default`.\n\
              #[derive(Clone, Debug, Default)]\n\
              pub struct {name}Impl {{\n    pub state: {wire}::{},\n}}\n\n",
             component.anchor.name()
@@ -476,11 +618,12 @@ fn impl_source(
     out.push_str(&format!("impl {interface} for {name}Impl {{\n"));
     let body: Vec<String> = methods
         .iter()
-        .map(|m| {
-            format!(
+        .map(|m| match written(m) {
+            Some(body) => format!("{}\n        {body}\n    }}\n", m.signature("", " {", true)),
+            None => format!(
                 "{}\n        todo!()\n    }}\n",
                 m.signature("_", " {", true)
-            )
+            ),
         })
         .collect();
     out.push_str(&body.join("\n"));
@@ -717,9 +860,9 @@ struct Block {
 }
 
 /// One method of a [`Block`]: its name, the message it takes (the last
-/// segment of its first parameter's type that is not the source root) and
-/// the parameter it takes it as (a leading `_` dropped), and its first and
-/// last lines.
+/// segment of its first parameter's type that is not the source root; for
+/// a method taking none, its name and `()`) and the parameter it takes it as
+/// (a leading `_` dropped), and its first and last lines.
 struct BlockMethod {
     name: String,
     ty: String,
@@ -778,14 +921,17 @@ fn block(file: &syn::File, like: Option<&Block>) -> Option<Block> {
         }
         let methods = sigs
             .into_iter()
-            .filter_map(|(sig, first, last)| {
-                let (param, ty) = first_message(sig)?;
-                Some(BlockMethod {
+            .map(|(sig, first, last)| {
+                // A method taking no message (an aggregate's `snapshot`)
+                // is keyed by its name, written so no message's name is it.
+                let (param, ty) = first_message(sig)
+                    .unwrap_or_else(|| (String::new(), format!("{}()", sig.ident)));
+                BlockMethod {
                     name: sig.ident.to_string(),
                     ty,
                     param,
                     lines: (first, last),
-                })
+                }
             })
             .collect();
         Some(Block {
@@ -862,7 +1008,11 @@ fn application(components: &[Component]) -> Vec<&Component> {
 /// its implementation (`crate::<component>_impl::<Component>Impl`). A
 /// policy's adapter has its one `#[on_refused]` callback, reading the
 /// target's refusal choice and translating it through its interface's
-/// required `refused` (decisions 14.89, 14.99). What a child process serves is in `remote`, a domain by its
+/// required `refused` (decisions 14.89, 14.99). An aggregate's or a process
+/// manager's adapter implements angzarr-embedded's `markup::Snapshots` over
+/// its anchor's domain type through its interface's `snapshot` and
+/// `restore`, so it takes snapshots exactly when its implementation
+/// overrides them. What a child process serves is in `remote`, a domain by its
 /// stream domain, a policy or a projector by its name in the application.
 /// A remote domain has no markup here: it is its command set
 /// (`CommandTarget`) and its event set (`EventSource`), so a policy can name
@@ -1158,6 +1308,7 @@ fn domain_markup(kind: ComponentKind) -> &'static str {
 /// delegating to its interface.
 fn domain_adapter(component: &Component, domain: &[(&str, &str)]) -> TokenStream {
     let adapter = Adapter::of(component, domain);
+    let snapshots = snapshots(component, &adapter, domain);
     let declaration = adapter.declaration(component);
     let Adapter {
         name,
@@ -1213,7 +1364,19 @@ fn domain_adapter(component: &Component, domain: &[(&str, &str)]) -> TokenStream
         impl #name {
             #steps
         }
+
+        #snapshots
     }
+}
+
+/// A domain adapter's `markup::Snapshots`: its anchor's domain type (its
+/// state), and the interface's `snapshot` and `restore`, which take none
+/// unless the implementation overrides them. The markup writes the
+/// aggregate's or process manager's `State` from it, the anchor's wire type
+/// its registered state type and what a snapshot holds.
+fn snapshots(component: &Component, adapter: &Adapter, domain: &[(&str, &str)]) -> TokenStream {
+    let _ = (component, adapter, domain);
+    TokenStream::new()
 }
 
 /// A domain adapter's fold of `event`, delegating to `interface`.

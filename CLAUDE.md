@@ -21,7 +21,7 @@ Every angzarr pin in `Cargo.toml` is a full commit, and they move together:
 - angzarr core (`angzarr-diagnostic`, `angzarr-proto`, `angzarr-test-dir`,
   and for the tests `angzarr-presentation`): 03663846fc7609378739f616e785e88b99ba0a1c
 - angzarr-router (`angzarr-router`, through the generated code's tests): 5e887e163a2712e35e213f0d79f9755418a7c0df
-- angzarr-embedded (`angzarr-embedded-host-config`): 23a507fa952d498bca5647aa36c9e9e24128e403
+- angzarr-embedded (`angzarr-embedded-host-config`): cc3c07d8ebbce19b0cc6bb639a9490516a2808fd
 
 The spec submodule `angzarr-project` is the codegen tier's feature files
 (`crates/angzarr-codegen/tests/spec.rs`); `git submodule update --init`
@@ -36,10 +36,12 @@ shared target directory: `buyin-app` and `kinds-app` (generated layer plus
 components with their bodies written; built and run), `blackjack-app` and
 `bare-app` (the blackjack example's protos, and a domain with no events: the
 generated layer plus the scaffold of the day, written there fresh and never
-committed, type-checked). `anchors-app` is the shapes fixtures' state anchors in a
+committed, type-checked). `anchors-app` is the shapes fixtures' aggregates in a
 crate whose components are in two packages, each package's layer at its own
-path: its generated adapters and the scaffold of the day type-checked, and
-aggregates written by hand snapshotting as their anchors' wire types. They build the embedded runtime, so they are
+path: its generated adapters and the scaffold of the day type-checked, the
+orders (whose entry in its `angzarr.yaml` sets `scaffold.snapshots`)
+snapshotting as their anchor's wire type and the catalog taking none. They
+build the embedded runtime, so they are
 `#[ignore]`d from a plain `cargo test` and from mutation runs: `just test`
 runs them after the rest, `just test-slow` alone.
 

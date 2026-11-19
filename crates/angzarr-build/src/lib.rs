@@ -23,7 +23,7 @@ use angzarr_diagnostic::{Arg, Diagnostic, catalog, code};
 
 pub use angzarr_codegen::{
     ANGZARR_BUILD_GIT, ANGZARR_EMBEDDED_REV, AppLint, AppSeed, DomainCrate, Existing, Exposure,
-    Linted, Notes, PinDrift, ProtoInput, PythonApp, RetrySeed, Warning,
+    Linted, Notes, PinDrift, ProtoInput, PythonApp, RetrySeed, ScaffoldConfig, Warning,
 };
 
 /// This crate's en-US messages: its package name, and its catalog, each id
@@ -442,20 +442,32 @@ pub enum Scaffolded {
 /// required, a policy's refusal callback too). An absent file is
 /// written; an existing one is the user's, kept, or completed with
 /// `Existing::Complete`. Every file is decided before any is written, so a
-/// refusal writes none.
+/// refusal writes none. It is written as the host config beside `src`
+/// configures it (`angzarr.yaml` in `src`'s parent, the crate's root:
+/// [`host_scaffold`]), and with no config there, as the default, every
+/// component keeping its interface's defaults.
 pub fn scaffold_into(
     src: &Path,
     protos: &[&str],
     includes: &[&str],
     existing: Existing,
 ) -> Result<Vec<Scaffolded>, BuildError> {
-    scaffold_with_into(src, protos, includes, existing, &[], &[])
+    let beside = src
+        .parent()
+        .unwrap_or(Path::new(""))
+        .join(angzarr_codegen::HOST_CONFIG);
+    let config = match beside.exists() {
+        true => host_scaffold(&beside)?,
+        false => ScaffoldConfig::default(),
+    };
+    scaffold_with_into(src, protos, includes, existing, &[], &[], &config)
 }
 
 /// [`scaffold_into`], each component's implementation importing its
 /// package's domain layer at the path `domain` names for it, and holding a
 /// wire state at the path `wire` names, as [`markup_domain_with`] places
-/// them (see `angzarr_codegen::scaffold_with`).
+/// them, and written as `config` says, a host config's [`host_scaffold`]
+/// (see `angzarr_codegen::scaffold_with`).
 pub fn scaffold_with_into(
     src: &Path,
     protos: &[&str],
@@ -463,11 +475,21 @@ pub fn scaffold_with_into(
     existing: Existing,
     wire: &[(&str, &str)],
     domain: &[(&str, &str)],
+    config: &ScaffoldConfig,
 ) -> Result<Vec<Scaffolded>, BuildError> {
     let bytes = scaffold_descriptors(protos, includes)?;
-    let files = angzarr_codegen::scaffold_with(&bytes, protos, wire, domain)
+    let files = angzarr_codegen::scaffold_with(&bytes, protos, wire, domain, config)
         .map_err(BuildError::Codegen)?;
     write_scaffold(src, files, existing)
+}
+
+/// The scaffold's configuration the host config at `config` (an
+/// application's `angzarr.yaml`) gives: the aggregates and process
+/// managers whose `component` entry sets `scaffold.snapshots`, which the
+/// scaffold writes taking snapshots (see `angzarr_codegen::host_scaffold`).
+pub fn host_scaffold(config: &Path) -> Result<ScaffoldConfig, BuildError> {
+    let text = std::fs::read_to_string(config).map_err(|e| io(config, &e))?;
+    angzarr_codegen::host_scaffold(&text).map_err(BuildError::Codegen)
 }
 
 /// The uv project of one Python domain (see

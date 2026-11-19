@@ -7,7 +7,7 @@ use crate::domain::*;
 #[derive(Clone, Debug, Default)]
 pub struct BuyInWalletPolicyImpl;
 
-impl BuyInWalletPolicy for BuyInWalletPolicyImpl {
+impl BuyInWalletPolicyInterface for BuyInWalletPolicyImpl {
     fn buy_in_started(
         &self,
         source: &[u8],

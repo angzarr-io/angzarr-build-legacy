@@ -13,7 +13,6 @@ message CatalogState {
     component_name: "catalog"
     aggregate: {domain: "catalog"}
   };
-  option (io.angzarr.codegen.v1.message) = {state: true};
 
   repeated Item items = 1;
   map<string, uint32> stock = 2;

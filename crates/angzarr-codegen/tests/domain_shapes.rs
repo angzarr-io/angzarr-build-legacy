@@ -8,8 +8,9 @@
 mod common;
 
 use angzarr_codegen::{
-    CodegenError, Generated, ProtoError, UseError, adapters, adapters_with, markup_domain,
-    markup_domain_with, scaffold, scaffold_with,
+    CodegenError, Completion, Existing, Generated, Notes, ProtoError, ScaffoldConfig, ScaffoldFile,
+    UseError, adapters, adapters_with, complete, markup_domain, markup_domain_with, scaffold,
+    scaffold_with,
 };
 use common::*;
 
@@ -486,13 +487,18 @@ fn test_default_is_derived_where_every_field_has_one() {
     assert!(derives(&layer("shapes.common.v1"), "Money").contains("Default"));
 }
 
-// region state anchors
+// region anchors and snapshots
 
-/// An anchor declaring `state` is a domain type of its layer (its
+/// The gauge fixture: an aggregate whose anchor's domain type has no
+/// `Default`, and a process manager.
+const GAUGE: &[&str] = &["gauge/v1/gauge.proto"];
+
+/// An aggregate's anchor is its state: a domain type of its layer (its
 /// `Default` the empty state), a `DomainMessage` like an input or event,
-/// and its component's interface is `<Anchor>Interface`.
+/// and its component's interface is `<Anchor>Interface`, so the two never
+/// collide.
 #[test]
-fn test_a_state_anchor_is_a_domain_type_beside_its_interface() {
+fn test_an_anchor_is_a_domain_type_beside_its_interface() {
     let order = layer("shapes.order.v1");
     assert_eq!(
         fields(&order, "OrderState"),
@@ -515,11 +521,41 @@ fn test_a_state_anchor_is_a_domain_type_beside_its_interface() {
     );
 }
 
-/// A state anchor's adapter delegates to `<Anchor>Interface`, and its
+/// Every component's interface is `<Anchor>Interface`, a policy's and a
+/// projector's too, and no anchor's name is a trait.
+#[test]
+fn test_every_components_interface_is_its_anchors_name_and_interface() {
+    let generated = markup_domain(&descriptors(BUYIN), BUYIN, BUYIN_WIRE).unwrap();
+    let file = syn::parse_file(&generated[0].source).unwrap();
+    let traits: Vec<String> = file
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            syn::Item::Trait(t) if t.ident.to_string().ends_with("Interface") => {
+                Some(t.ident.to_string())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        traits,
+        [
+            "WalletStateInterface",
+            "BuyInStateInterface",
+            "BuyInWalletPolicyInterface",
+            "WalletBuyInPolicyInterface",
+        ]
+    );
+    let structs = names(&file);
+    assert!(structs.contains(&"WalletState".to_string()), "{structs:?}");
+    assert!(structs.contains(&"BuyInState".to_string()), "{structs:?}");
+}
+
+/// An aggregate's adapter delegates to `<Anchor>Interface`, and its
 /// scaffold implements that interface on a state of the anchor's domain
 /// type.
 #[test]
-fn test_a_state_anchors_adapter_and_scaffold_name_its_interface() {
+fn test_an_aggregates_adapter_and_scaffold_name_its_interface() {
     let set = descriptors(SHAPES);
     let source = adapters(&set, SHAPES, &[]).unwrap();
     assert!(
@@ -527,10 +563,7 @@ fn test_a_state_anchors_adapter_and_scaffold_name_its_interface() {
         "{source}"
     );
     let files = scaffold(&set, SHAPES).unwrap();
-    let order = files
-        .iter()
-        .find(|f| f.path == "order_state_impl.rs")
-        .unwrap_or_else(|| panic!("{:?}", files.iter().map(|f| &f.path).collect::<Vec<_>>()));
+    let order = order_impl(&files);
     assert!(
         order
             .source
@@ -545,16 +578,359 @@ fn test_a_state_anchors_adapter_and_scaffold_name_its_interface() {
     );
 }
 
-/// An anchor without `state` keeps the interface its name, as before.
+/// The interface of an aggregate or a process manager ends with its
+/// snapshots over the anchor's domain type, `snapshot` and `restore`, which
+/// it does not require: their defaults take none, `restore`'s refusing the
+/// snapshot under angzarr-embedded's `NotSnapshotted`.
 #[test]
-fn test_an_anchor_without_state_keeps_its_interface_name() {
-    let generated = markup_domain(&descriptors(BUYIN), BUYIN, BUYIN_WIRE).unwrap();
-    let file = syn::parse_file(&generated[0].source).unwrap();
-    assert!(names(&file).contains(&"WalletState".to_string()));
-    assert!(!names(&file).contains(&"WalletStateInterface".to_string()));
+fn test_an_interface_offers_snapshots_over_the_anchors_domain_type() {
+    let order = layer("shapes.order.v1");
+    let interface = order
+        .items
+        .iter()
+        .find_map(|i| match i {
+            syn::Item::Trait(t) if t.ident == "OrderStateInterface" => Some(t),
+            _ => None,
+        })
+        .expect("the interface");
+    let methods: Vec<(String, Option<String>)> = interface
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            syn::TraitItem::Fn(f) => Some((text(&f.sig), f.default.as_ref().map(text))),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        methods,
+        [
+            (
+                "fnplace_order(&self,cmd:&PlaceOrder,ctx:&Context,)->Result<Vec<OrderStateEvent>,Failed<OrderRefused>>"
+                    .to_string(),
+                None
+            ),
+            (
+                "fnapply_order_placed(&mutself,event:&OrderPlaced)".to_string(),
+                None
+            ),
+            (
+                "fnsnapshot(&self)->Option<OrderState>".to_string(),
+                Some("{None}".to_string())
+            ),
+            (
+                "fnrestore(&mutself,state:OrderState)->Result<(),Report>".to_string(),
+                Some(
+                    "{let_=state;Err(Report::of(&::angzarr_embedded::NotSnapshotted::of::<\
+                     <OrderStateas::angzarr_embedded::markup::DomainMessage>::Wire,>()))}"
+                        .to_string()
+                )
+            ),
+        ]
+    );
+    let doc = "`snapshot` and `restore` are its snapshots, its state as the anchor's domain \
+               type, which angzarr-embedded stores as the anchor's wire type and resumes a \
+               fresh implementation from (`markup::Snapshots`). Their defaults take none; \
+               overriding both opts in.";
+    let source = source("shapes.order.v1");
+    assert!(
+        flat(&source.replace("///", "")).contains(&flat(doc)),
+        "{source}"
+    );
 }
 
-// endregion state anchors
+/// An aggregate's adapter implements angzarr-embedded's `markup::Snapshots`
+/// over the anchor's domain type, delegating both methods to its
+/// interface, so it takes snapshots exactly when the implementation
+/// overrides them; the markup takes no argument for it.
+#[test]
+fn test_an_aggregates_adapter_takes_its_snapshots_through_its_interface() {
+    let set = descriptors(SHAPES);
+    let file = parse_adapters(&adapters(&set, SHAPES, &[]).unwrap());
+    let marked = file
+        .items
+        .iter()
+        .find_map(|i| match i {
+            syn::Item::Impl(imp)
+                if text(&imp.self_ty) == "OrderState"
+                    && imp.attrs.iter().any(|a| a.path().is_ident("aggregate")) =>
+            {
+                Some(imp)
+            }
+            _ => None,
+        })
+        .expect("the aggregate");
+    assert_eq!(
+        impl_markup(marked),
+        (
+            "aggregate".to_string(),
+            "domain=\"orders\",command=OrderStateCommand,event=OrderStateEvent".to_string()
+        )
+    );
+    let snapshots = file
+        .items
+        .iter()
+        .find_map(|i| match i {
+            syn::Item::Impl(imp)
+                if text(&imp.self_ty) == "OrderState"
+                    && imp.trait_.as_ref().is_some_and(|(path, _)| {
+                        text(path) == "::angzarr_embedded::markup::Snapshots"
+                    }) =>
+            {
+                Some(imp)
+            }
+            _ => None,
+        })
+        .expect("the adapter's Snapshots");
+    let anchor = snapshots.items.iter().find_map(|i| match i {
+        syn::ImplItem::Type(t) => Some(text(&t.ty)),
+        _ => None,
+    });
+    assert_eq!(anchor.as_deref(), Some("crate::domain::OrderState"));
+    let bodies: Vec<(String, String)> = methods(snapshots)
+        .into_iter()
+        .map(|f| (text(&f.sig), text(&f.block)))
+        .collect();
+    assert_eq!(
+        bodies,
+        [
+            (
+                "fnsnapshot(&self)->Option<crate::domain::OrderState>".to_string(),
+                "{crate::domain::OrderStateInterface::snapshot(&self.0)}".to_string()
+            ),
+            (
+                "fnrestore(&mutself,anchor:crate::domain::OrderState,)->Result<(),::angzarr_embedded::markup::Report>"
+                    .to_string(),
+                "{crate::domain::OrderStateInterface::restore(&mutself.0,anchor)}".to_string()
+            ),
+        ]
+    );
+}
+
+/// The orders' implementation as the scaffold writes it.
+fn order_impl(files: &[ScaffoldFile]) -> &ScaffoldFile {
+    files
+        .iter()
+        .find(|f| f.path == "order_state_impl.rs")
+        .expect("the order's implementation")
+}
+
+/// The scaffold configuration naming the orders.
+fn orders() -> ScaffoldConfig {
+    ScaffoldConfig {
+        snapshots: vec!["orders".to_string()],
+    }
+}
+
+/// The snapshot methods, as the scaffold's files name them.
+fn snapshot_methods() -> Vec<String> {
+    ["snapshot", "restore"].map(String::from).to_vec()
+}
+
+/// An implementation the configuration names is written taking snapshots:
+/// `snapshot` and `restore` over the state it holds, the anchor's domain
+/// type, cloned and assigned, both selected. One it does not name keeps
+/// the interface's defaults: neither is written, both offered.
+#[test]
+fn test_the_configured_scaffold_takes_snapshots_of_the_state_it_holds() {
+    let set = descriptors(SHAPES);
+    let files = scaffold_with(&set, SHAPES, &[], &[], &orders()).unwrap();
+    let order = order_impl(&files);
+    assert!(
+        order.source.ends_with(
+            "    fn snapshot(&self) -> Option<OrderState> {\n        Some(self.state.clone())\n    }\n\n    \
+             fn restore(&mut self, state: OrderState) -> Result<(), Report> {\n        \
+             self.state = state;\n        Ok(())\n    }\n}\n"
+        ),
+        "{}",
+        order.source
+    );
+    assert!(
+        order.source.contains(
+            "//! `--missing` adds the required methods it lacks, each `todo!()` but\n\
+             //! `snapshot` and `restore`, which take snapshots of `state`.\n"
+        ),
+        "{}",
+        order.source
+    );
+    assert_eq!(order.optional, snapshot_methods());
+    assert_eq!(order.selected, snapshot_methods());
+    let catalog = files
+        .iter()
+        .find(|f| f.path == "catalog_state_impl.rs")
+        .expect("the catalog's implementation");
+    assert!(
+        !catalog.source.contains("fn snapshot"),
+        "{}",
+        catalog.source
+    );
+    assert!(!catalog.source.contains("fn restore"), "{}", catalog.source);
+    assert_eq!(catalog.optional, snapshot_methods());
+    assert!(catalog.selected.is_empty());
+    let plain = scaffold(&set, SHAPES).unwrap();
+    assert_eq!(order_impl(&plain).source, catalog_like(&order.source));
+}
+
+/// `source` without its snapshot methods and their note: what an
+/// implementation the configuration does not name is.
+fn catalog_like(source: &str) -> String {
+    let start = source.find("\n    fn snapshot(").expect("a snapshot");
+    format!("{}}}\n", &source[..start]).replace(
+        " each `todo!()` but\n//! `snapshot` and `restore`, which take snapshots of `state`.",
+        " each `todo!()`.",
+    )
+}
+
+/// A configuration taking snapshots of a component the protos declare as
+/// a policy is refused, naming it: it holds no state. One the protos do not
+/// declare is another crate's, and changes nothing here.
+#[test]
+fn test_a_configuration_taking_snapshots_of_a_policy_is_refused() {
+    let set = descriptors(BUYIN);
+    let policy = ScaffoldConfig {
+        snapshots: vec!["wallet".to_string(), "policy-buyin-wallet".to_string()],
+    };
+    assert_eq!(
+        scaffold_with(&set, BUYIN, &[], &[], &policy),
+        Err(CodegenError::Use(UseError::ScaffoldNoComponent {
+            component: "policy-buyin-wallet".to_string()
+        })),
+    );
+    let elsewhere = ScaffoldConfig {
+        snapshots: vec!["nowhere".to_string()],
+    };
+    assert_eq!(
+        scaffold_with(&set, BUYIN, &[], &[], &elsewhere).unwrap(),
+        scaffold(&set, BUYIN).unwrap()
+    );
+    let config = ScaffoldConfig {
+        snapshots: vec!["wallet".to_string(), "pmg-buyin".to_string()],
+    };
+    let files = scaffold_with(&set, BUYIN, &[], &[], &config).unwrap();
+    let selected: Vec<(&str, usize)> = files
+        .iter()
+        .filter(|f| f.path.ends_with("_impl.rs"))
+        .map(|f| (f.path.as_str(), f.selected.len()))
+        .collect();
+    assert_eq!(
+        selected,
+        [
+            ("wallet_state_impl.rs", 2),
+            ("buy_in_state_impl.rs", 2),
+            ("buy_in_wallet_policy_impl.rs", 0),
+            ("wallet_buy_in_policy_impl.rs", 0),
+        ]
+    );
+}
+
+/// An anchor whose domain type has no `Default` is held as its wire type,
+/// at its package's wire path, and its configured snapshot methods are
+/// written `todo!()`, as every other: only the user knows its conversion.
+/// A process manager's anchor that has one is held and cloned as an
+/// aggregate's is.
+#[test]
+fn test_a_wire_held_state_is_scaffolded_with_todo_snapshots() {
+    let set = descriptors(GAUGE);
+    let config = ScaffoldConfig {
+        snapshots: vec!["gauge".to_string(), "pmg-reading".to_string()],
+    };
+    let files = scaffold_with(&set, GAUGE, &[("gauge.v1", "::gauge_proto")], &[], &config).unwrap();
+    let gauge = files
+        .iter()
+        .find(|f| f.path == "gauge_state_impl.rs")
+        .expect("the gauge's implementation");
+    assert!(
+        gauge.source.contains(
+            "/// The state the `apply_` methods fold: the anchor's wire type, as its\n\
+             /// domain type has no `Default`.\n#[derive(Clone, Debug, Default)]\n\
+             pub struct GaugeStateImpl {\n    pub state: ::gauge_proto::GaugeState,\n}\n"
+        ),
+        "{}",
+        gauge.source
+    );
+    assert!(
+        gauge.source.ends_with(
+            "    fn snapshot(&self) -> Option<GaugeState> {\n        todo!()\n    }\n\n    \
+             fn restore(&mut self, _state: GaugeState) -> Result<(), Report> {\n        \
+             todo!()\n    }\n}\n"
+        ),
+        "{}",
+        gauge.source
+    );
+    assert!(
+        gauge
+            .source
+            .contains("//! `--missing` adds the required methods it lacks, each `todo!()`.\n"),
+        "{}",
+        gauge.source
+    );
+    let reading = files
+        .iter()
+        .find(|f| f.path == "reading_state_impl.rs")
+        .expect("the process manager's implementation");
+    assert!(
+        reading.source.contains("pub state: ReadingState,")
+            && reading
+                .source
+                .contains("        Some(self.state.clone())\n"),
+        "{}",
+        reading.source
+    );
+    let layer = markup_domain(&set, GAUGE, &[("gauge.v1", "::gauge_proto")]).unwrap();
+    let file = syn::parse_file(&layer[0].source).unwrap();
+    assert!(!derives(&file, "GaugeState").contains("Default"));
+}
+
+/// `--missing` adds the selected two to an implementation written before
+/// them, as the scaffold writes them, kept or completed alike; present,
+/// nothing is added and nothing is obsolete. Unselected, they are offered.
+#[test]
+fn test_complete_adds_the_selected_snapshot_methods() {
+    let files = scaffold_with(&descriptors(SHAPES), SHAPES, &[], &[], &orders()).unwrap();
+    let fresh = order_impl(&files);
+    let mine = catalog_like(&fresh.source);
+    for mode in [Existing::Keep, Existing::Complete] {
+        let completed = complete(fresh, &mine, mode).unwrap();
+        assert_eq!(
+            completed.completed.as_deref().map(|c| c.replace(
+                " each `todo!()`.",
+                " each `todo!()` but\n//! `snapshot` and `restore`, which take snapshots of `state`."
+            )),
+            Some(fresh.source.clone()),
+            "{mode:?}"
+        );
+        assert_eq!(completed.notes, Notes::default(), "{mode:?}");
+    }
+    let whole = complete(fresh, &fresh.source, Existing::Complete).unwrap();
+    assert_eq!(whole, Completion::default());
+    let plain = scaffold(&descriptors(SHAPES), SHAPES).unwrap();
+    let kept = complete(order_impl(&plain), &mine, Existing::Complete).unwrap();
+    assert_eq!(kept.completed, None);
+    assert_eq!(kept.notes.optional, snapshot_methods());
+    assert!(kept.notes.lacks.is_empty(), "{:?}", kept.notes);
+}
+
+/// A method of no message in the user's implementation that the interface
+/// does not have is reported obsolete, as a handler of a message the protos
+/// dropped is; its snapshot methods, which the interface offers, are not.
+#[test]
+fn test_complete_reports_a_method_of_no_message_the_interface_lacks() {
+    let files = scaffold_with(&descriptors(SHAPES), SHAPES, &[], &[], &orders()).unwrap();
+    let fresh = order_impl(&files);
+    let mine = fresh.source.replace(
+        "    fn snapshot(&self)",
+        "    fn checksum(&self) -> u32 {\n        0\n    }\n\n    fn snapshot(&self)",
+    );
+    assert_ne!(mine, fresh.source);
+    let plain = scaffold(&descriptors(SHAPES), SHAPES).unwrap();
+    for fresh in [fresh, order_impl(&plain)] {
+        let kept = complete(fresh, &mine, Existing::Keep).unwrap();
+        assert_eq!(kept.notes.obsolete, ["checksum"]);
+        assert!(kept.notes.lacks.is_empty(), "{:?}", kept.notes);
+        assert!(kept.notes.optional.is_empty(), "{:?}", kept.notes);
+    }
+}
+
+// endregion anchors and snapshots
 
 // region golden
 
@@ -610,7 +986,14 @@ fn test_adapters_of_one_layer_are_one_module() {
 /// Each component's scaffold imports its own package's layer.
 #[test]
 fn test_each_components_scaffold_imports_its_packages_layer() {
-    let files = scaffold_with(&descriptors(SHAPES), SHAPES, WIRE, DOMAIN).unwrap();
+    let files = scaffold_with(
+        &descriptors(SHAPES),
+        SHAPES,
+        WIRE,
+        DOMAIN,
+        &ScaffoldConfig::default(),
+    )
+    .unwrap();
     for f in files.iter().filter(|f| f.path.ends_with("_impl.rs")) {
         golden(&format!("rust/shapes/{}", f.path), &f.source);
     }
@@ -626,13 +1009,22 @@ fn test_each_components_scaffold_imports_its_packages_layer() {
     );
 }
 
-/// An anchor without `state` is scaffolded holding its wire type, at its
-/// package's wire path; with no paths given, `crate::wire` and
-/// `crate::domain`, as `scaffold` writes it.
+/// A scaffold imports its package's layer at its domain path, and holds
+/// the anchor's domain type (a wire-held state, at its package's wire
+/// path, is the gauge's: `test_a_wire_held_state_is_scaffolded_with_todo_snapshots`);
+/// with no paths given, `crate::wire` and `crate::domain`, as `scaffold`
+/// writes it.
 #[test]
 fn test_a_scaffolds_wire_state_is_at_its_packages_wire_path() {
     let set = descriptors(BUYIN);
-    let files = scaffold_with(&set, BUYIN, BUYIN_WIRE, &[("buyin.v1", "crate::buyin")]).unwrap();
+    let files = scaffold_with(
+        &set,
+        BUYIN,
+        BUYIN_WIRE,
+        &[("buyin.v1", "crate::buyin")],
+        &ScaffoldConfig::default(),
+    )
+    .unwrap();
     let wallet = files
         .iter()
         .find(|f| f.path == "wallet_state_impl.rs")
@@ -643,18 +1035,26 @@ fn test_a_scaffolds_wire_state_is_at_its_packages_wire_path() {
         wallet.source
     );
     assert!(
-        wallet
-            .source
-            .contains("pub state: ::buyin_proto::v1::WalletState,"),
+        wallet.source.contains("pub state: WalletState,"),
         "{}",
         wallet.source
     );
     let plain = scaffold(&set, BUYIN).unwrap();
-    assert_eq!(scaffold_with(&set, BUYIN, &[], &[]).unwrap(), plain);
+    assert_eq!(
+        scaffold_with(&set, BUYIN, &[], &[], &ScaffoldConfig::default()).unwrap(),
+        plain
+    );
     // A path that is not a Rust path is none given.
     let unparsed = [("buyin.v1", "not a path")];
     assert_eq!(
-        scaffold_with(&set, BUYIN, &unparsed, &unparsed).unwrap(),
+        scaffold_with(
+            &set,
+            BUYIN,
+            &unparsed,
+            &unparsed,
+            &ScaffoldConfig::default()
+        )
+        .unwrap(),
         plain
     );
 }

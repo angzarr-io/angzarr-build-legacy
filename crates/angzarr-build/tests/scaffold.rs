@@ -10,8 +10,8 @@
 use std::path::Path;
 
 use angzarr_build::{
-    BuildError, Existing, Notes, Scaffolded, adapters_into, markup_domain_into, register_into,
-    scaffold_into,
+    BuildError, Existing, Notes, ScaffoldConfig, Scaffolded, adapters_into, host_scaffold,
+    markup_domain_into, register_into, scaffold_into,
 };
 use angzarr_codegen::{CodegenError, UseError};
 
@@ -65,7 +65,7 @@ fn test_scaffold_into_writes_each_absent_file() {
 fn test_scaffold_into_never_overwrites_a_users_file_and_reports_what_it_lacks() {
     let src = empty_dir();
     scaffold(&src, Existing::Keep);
-    let mine = "//! The user's wallet.\n\nimpl WalletState for WalletStateImpl {}\n";
+    let mine = "//! The user's wallet.\n\nimpl WalletStateInterface for WalletStateImpl {}\n";
     std::fs::write(src.join("wallet_state_impl.rs"), mine).unwrap();
     let done = scaffold(&src, Existing::Keep);
     let lacks = done
@@ -368,4 +368,52 @@ fn test_an_orphaned_generated_file_under_gen_is_deleted() {
     assert!(!orphan.exists());
     assert!(pb2.exists(), "buf's own is not an orphan");
     assert!(notes.exists(), "an unmarked file is never deleted");
+}
+
+/// A host config gives the scaffold's configuration: the components its
+/// entries' `scaffold.snapshots` set; a config that is not there is
+/// refused, naming it.
+#[test]
+fn test_host_scaffold_reads_the_apps_host_config() {
+    let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-host-scaffold"));
+    let config = dir.join("angzarr.yaml");
+    std::fs::write(&config, WALLET_SNAPSHOTS).unwrap();
+    assert_eq!(
+        host_scaffold(&config).unwrap(),
+        ScaffoldConfig {
+            snapshots: vec!["wallet".to_string()],
+        }
+    );
+    let absent = dir.join("absent").join("angzarr.yaml");
+    assert!(
+        matches!(host_scaffold(&absent), Err(BuildError::Io { .. })),
+        "{:?}",
+        host_scaffold(&absent)
+    );
+}
+
+/// A host config taking the wallet's snapshots.
+const WALLET_SNAPSHOTS: &str = "schema_version: 4\ncomponent:\n  \
+    - {name: wallet, kind: domain, language: rust, scaffold: {snapshots: true}}\n";
+
+/// `scaffold_into`, what `angzarr scaffold rust` calls, reads the host
+/// config beside the source directory, in the crate's root: the wallet's
+/// implementation takes snapshots there, and with no config beside it,
+/// none does.
+#[test]
+fn test_scaffold_into_writes_as_the_host_config_beside_src_says() {
+    let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-scaffold-beside"));
+    let configured = dir.join("configured");
+    std::fs::create_dir_all(configured.join("src")).unwrap();
+    std::fs::write(configured.join("angzarr.yaml"), WALLET_SNAPSHOTS).unwrap();
+    let bare = dir.join("bare");
+    std::fs::create_dir_all(bare.join("src")).unwrap();
+    for (root, snapshots) in [(&configured, true), (&bare, false)] {
+        let src = root.join("src");
+        scaffold_into(&src, BUYIN, &[&fixtures()], Existing::Keep).unwrap();
+        let wallet = std::fs::read_to_string(src.join("wallet_state_impl.rs")).unwrap();
+        assert_eq!(wallet.contains("fn snapshot(&self)"), snapshots, "{wallet}");
+        let buy_in = std::fs::read_to_string(src.join("buy_in_state_impl.rs")).unwrap();
+        assert!(!buy_in.contains("fn snapshot(&self)"), "{buy_in}");
+    }
 }

@@ -220,7 +220,7 @@ fn what_the_domain_cannot_hold_is_refused() {
     );
 }
 
-/// A state anchor's `Default` is the empty state, and an id newtype's text
+/// An anchor's `Default` is the empty state, and an id newtype's text
 /// is its UUID's.
 #[test]
 fn a_state_defaults_empty_and_an_id_reads_as_its_uuid() {

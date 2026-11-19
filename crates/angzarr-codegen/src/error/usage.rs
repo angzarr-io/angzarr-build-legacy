@@ -34,6 +34,9 @@ pub enum UseError {
         expected: String,
         found: String,
     },
+    /// The scaffold's configuration names a component the protos declare
+    /// as a policy or a projector, which holds no state to snapshot.
+    ScaffoldNoComponent { component: String },
 }
 
 impl fmt::Display for UseError {
@@ -53,6 +56,7 @@ impl Diagnostic for UseError {
             UseError::PythonNoDomain { .. } => code!("python-no-domain"),
             UseError::ScaffoldImplNotFound { .. } => code!("scaffold-impl-not-found"),
             UseError::InputMismatch { .. } => code!("input-mismatch"),
+            UseError::ScaffoldNoComponent { .. } => code!("scaffold-no-component"),
         }
     }
 
@@ -70,6 +74,7 @@ impl Diagnostic for UseError {
                 expected,
                 found,
             } => texts![path, message, expected, found],
+            E::ScaffoldNoComponent { component } => texts![component],
         }
     }
 }
@@ -98,6 +103,9 @@ pub(super) fn samples() -> Vec<UseError> {
             message: text("message"),
             expected: text("expected"),
             found: text("found"),
+        },
+        E::ScaffoldNoComponent {
+            component: text("component"),
         },
     ]
 }

@@ -21,6 +21,7 @@ component-name = { $component }'s name "{ $name }" is not lower-case letters, di
 source-takes-no-fact = { $policy } may send a command that can refuse, but its source domain { $domain } takes no fact to translate a refusal into; declare one of the source's inputs with (fact)
 refusal-choice-name = { $message } is named { $name }, which the generated domain layer gives the refusals of { $command }; rename it
 interface-name = { $message } is named { $name }, which the generated domain layer gives { $component }'s interface or its facts; rename it, or name the component (its component option's name)
+scaffold-no-component = the scaffold's configuration takes snapshots of { $component }, which the protos declare as a policy or a projector: it holds no state
 input-mismatch = { $path } takes { $message } as { $found }, but the proto declares it a { $expected }
 python-no-domain = the protos declare no component of the domain, or named, { $domain }
 app-config = the host config does not read as one: { $cause }

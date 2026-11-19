@@ -19,6 +19,7 @@ use proc_macro2::{TokenStream, TokenTree};
 const ALLOWED: &[&str] = &[
     "angzarr_embedded::Any",
     "angzarr_embedded::Misconfigured",
+    "angzarr_embedded::NotSnapshotted::of",
     "angzarr_embedded::Payload",
     "angzarr_embedded::PayloadError",
     "angzarr_embedded::PayloadError::UnknownType",
@@ -55,6 +56,7 @@ const ALLOWED: &[&str] = &[
     "angzarr_embedded::markup::Refuses",
     "angzarr_embedded::markup::Report",
     "angzarr_embedded::markup::RetryableStatus",
+    "angzarr_embedded::markup::Snapshots",
     "angzarr_embedded::markup::Translation",
     "angzarr_embedded::markup::Unrefusable",
     "angzarr_embedded::markup::type_url_of",

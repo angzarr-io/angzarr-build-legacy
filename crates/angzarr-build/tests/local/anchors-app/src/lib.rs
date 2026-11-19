@@ -1,7 +1,7 @@
-//! State anchors on angzarr-embedded, in a crate whose components are in
+//! Aggregates on angzarr-embedded, in a crate whose components are in
 //! two packages: each package's domain layer at its own path, the
-//! generated adapters and register() over the scaffold of the day, and an
-//! aggregate written by hand that snapshots as its anchor.
+//! generated adapters and register() over the scaffold of the day, the
+//! orders taking snapshots as their anchor's wire type and the catalog none.
 
 pub mod wire {
     include!(concat!(env!("OUT_DIR"), "/angzarr-wire.rs"));
@@ -23,4 +23,4 @@ include!(concat!(env!("OUT_DIR"), "/angzarr-register.rs"));
 
 pub mod catalog_state_impl;
 pub mod order_state_impl;
-pub mod snapshotted;
+mod snapshots;

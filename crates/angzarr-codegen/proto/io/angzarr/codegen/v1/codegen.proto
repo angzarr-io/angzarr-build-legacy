@@ -61,11 +61,11 @@ enum JsonNames {
 
 // On a message.
 message MessageCodegen {
-  // On a component's anchor: the anchor is the component's state (its
-  // snapshot). The domain layer generates its domain type beside the
-  // inputs' and events', and names the component's interface
-  // `<Anchor>Interface` instead of `<Anchor>`, so the two do not collide.
-  bool state = 1;
+  // No option says whether a component takes snapshots: an aggregate's or
+  // a process manager's anchor is its state, and taking snapshots is its
+  // implementation's choice (angzarr's docs/design/snapshots.md).
+  reserved 1;
+  reserved "state";
   // How the message's own fields are keyed in JSON.
   JsonNames json_names = 2;
   // Every field of the message that can be unset is written as `null` when

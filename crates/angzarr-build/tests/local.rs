@@ -11,17 +11,18 @@
 //!   built and run, a policy swapped for one written by hand.
 //! - `shapes-app`: the shapes fixtures, three packages each referencing
 //!   another's types (one of types alone), angzarr's UUID and id newtypes,
-//!   Duration, oneofs, nested types and state anchors: wire types and
+//!   Duration, oneofs, nested types and anchors: wire types and
 //!   domain layers, whose tests (property tests) convert each domain type to
 //!   its wire type, through prost's bytes, and back.
 //! - `json-app`: the json fixture's wire types and their generated proto3
 //!   JSON, held to golden files, round-tripped (property tests) and
 //!   cross-checked with prost-reflect's canonical mapping.
-//! - `anchors-app`: the shapes fixtures' state anchors, in a crate whose
+//! - `anchors-app`: the shapes fixtures' aggregates, in a crate whose
 //!   components are in two packages, each package's layer at its own
 //!   path: the generated adapters, register() and the scaffold of the day
-//!   type-checked; an aggregate written by hand snapshots as its anchor's
-//!   wire type and resumes from it.
+//!   (written as the app's host config configures it) type-checked; the
+//!   orders, whose scaffold takes snapshots, snapshot as their anchor's
+//!   wire type and resume from it, and the catalog takes none.
 //! - `blackjack-app`: the blackjack example's protos (the spec's): the
 //!   generated layer and the scaffold of the day, `todo!()` bodies and all,
 //!   type-checked. `bare-app` is the same for a domain with no events. Nothing
@@ -37,7 +38,9 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use angzarr_build::{Existing, Scaffolded, scaffold_into, scaffold_with_into};
+use angzarr_build::{
+    Existing, ScaffoldConfig, Scaffolded, host_scaffold, scaffold_into, scaffold_with_into,
+};
 
 use angzarr_test_dir::TestDir;
 
@@ -132,7 +135,8 @@ fn assert_complete_scaffold(app: &Path, protos: &[&str], components: &[&str], in
     let mut done = scaffold_into(&src, protos, includes, Existing::Complete).unwrap();
     done.sort_by_key(|d| format!("{d:?}"));
     // Each is kept as it is, lacking nothing: every method is required
-    // (decision 14.76), so none is optional.
+    // (decision 14.76) but an aggregate's or a process manager's
+    // `snapshot` and `restore`, which its interface defaults, offered.
     let kept: Vec<(PathBuf, Vec<String>, Vec<String>)> = done
         .into_iter()
         .filter_map(|d| match d {
@@ -140,9 +144,18 @@ fn assert_complete_scaffold(app: &Path, protos: &[&str], components: &[&str], in
             _ => None,
         })
         .collect();
+    let snapshots = ["snapshot", "restore"].map(String::from).to_vec();
     let expected: Vec<(PathBuf, Vec<String>, Vec<String>)> = components
         .iter()
-        .map(|file| (src.join(file), Vec::new(), Vec::new()))
+        .zip(&kept)
+        .map(|(file, (_, _, optional))| {
+            let offered = if optional.is_empty() {
+                Vec::new()
+            } else {
+                snapshots.clone()
+            };
+            (src.join(file), Vec::new(), offered)
+        })
         .collect();
     assert_eq!(kept, expected);
 }
@@ -304,7 +317,8 @@ fn assert_scaffold_type_checks(
 type Paths<'a> = &'a [(&'a str, &'a str)];
 
 /// The scaffold of today's protos, written fresh into `app`'s `src` with
-/// the packages' wire and domain paths: the modules the app declares.
+/// the packages' wire and domain paths, as `app`'s host config configures it:
+/// the modules the app declares.
 fn write_scaffold(
     app: &Path,
     protos: &[&str],
@@ -320,8 +334,21 @@ fn write_scaffold(
             std::fs::remove_file(path).unwrap();
         }
     }
-    let written =
-        scaffold_with_into(&src, protos, includes, Existing::Complete, wire, domain).unwrap();
+    let host = app.join("angzarr.yaml");
+    let config = match host.exists() {
+        true => host_scaffold(&host).unwrap(),
+        false => ScaffoldConfig::default(),
+    };
+    let written = scaffold_with_into(
+        &src,
+        protos,
+        includes,
+        Existing::Complete,
+        wire,
+        domain,
+        &config,
+    )
+    .unwrap();
     let mut files: Vec<String> = written
         .iter()
         .filter_map(|d| match d {
@@ -394,11 +421,13 @@ const SHAPES_DOMAIN: &[(&str, &str)] = &[
     ("shapes.order.v1", "crate::domain::order"),
 ];
 
-/// `tests/local/anchors-app`: state anchors, in a crate whose components
-/// are in two packages, each package's domain layer at its own path. The
-/// generated adapters and register() over the scaffold of the day
-/// type-check; then an aggregate written by hand over the layer snapshots
-/// as its anchor's wire type and resumes from it (the app's tests).
+/// `tests/local/anchors-app`: aggregates in a crate whose components are
+/// in two packages, each package's domain layer at its own path. The
+/// generated adapters and register() over the scaffold of the day, written
+/// as the app's host config configures it, type-check; then the orders'
+/// aggregate snapshots as its anchor's wire type and resumes from it, the
+/// catalog's takes none, and register() lists each as its anchor (the
+/// app's tests).
 #[test]
 #[ignore = "builds angzarr-embedded and its dependencies: slow; `just test-slow`"]
 fn test_state_anchors_of_two_packages_type_check_and_snapshot() {

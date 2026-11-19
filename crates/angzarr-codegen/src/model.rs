@@ -128,11 +128,9 @@ pub(crate) struct Component {
     pub kind: ComponentKind,
     /// The generated names' stem: the anchor message's name.
     pub name: String,
-    /// Whether the anchor is the component's state (`MessageCodegen.state`):
-    /// a domain type of its layer, its interface then `<name>Interface`.
-    pub state: bool,
-    /// The name of its interface, the domain layer's trait: its `name`, or
-    /// `<name>Interface` for a state anchor.
+    /// The name of its interface, the domain layer's trait:
+    /// `<name>Interface`, every kind alike, so an aggregate's or a process
+    /// manager's anchor, its state, is a domain type of the same name.
     pub interface: String,
     /// Its one required name in an application
     /// (`ComponentOptions.component_name`, decision 14.87).
@@ -288,12 +286,11 @@ fn refuse_taken(names: &[(String, String)]) -> Result<(), ProtoError> {
     Ok(())
 }
 
-/// The markup domain layer's packages by name: every type the inputs,
-/// events and refusals of each aggregate and process manager reach, and the
-/// events each projector projects, each in its own package's layer (a
-/// package of types alone has one). The state is the implementation's (its
-/// wire type), unless the anchor declares `state`; a policy holds no domain
-/// type.
+/// The markup domain layer's packages by name: every type the anchor,
+/// inputs, events and refusals of each aggregate and process manager reach
+/// (its anchor is its state), and the events each projector projects, each
+/// in its own package's layer (a package of types alone has one); a policy
+/// holds no domain type.
 pub(crate) fn build_markup(
     descriptor_set: &[u8],
     files: &[&str],
@@ -303,7 +300,8 @@ pub(crate) fn build_markup(
         .filter(|c| c.kind != ComponentKind::Policy)
         .collect();
     let packages = packages(components, |c| {
-        c.state
+        c.kind
+            .is_domain()
             .then(|| c.anchor.clone())
             .into_iter()
             .chain(
@@ -670,12 +668,7 @@ impl<'a> Markup<'a> {
                 anchor: message.clone(),
                 kind,
                 name: message.name().to_string(),
-                state: crate::options::is_state(message),
-                interface: if crate::options::is_state(message) {
-                    format!("{}Interface", message.name())
-                } else {
-                    message.name().to_string()
-                },
+                interface: format!("{}Interface", message.name()),
                 component_name,
                 domain: string_field(&declaration, "domain"),
                 input_domain: String::new(),

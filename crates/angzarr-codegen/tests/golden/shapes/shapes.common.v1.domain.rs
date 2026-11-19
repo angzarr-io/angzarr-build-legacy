@@ -67,6 +67,9 @@ pub use ::angzarr_embedded::markup::Compensation;
 pub use ::angzarr_embedded::markup::{
     BusinessStatus, Failed, RetryableStatus, Unrefusable,
 };
+/// Why an aggregate's or a process manager's `restore` refuses a
+/// snapshot: a diagnostic key and its args, never text.
+pub use ::angzarr_embedded::markup::Report;
 /// A typed refusal message: the status it is refused under, the
 /// `(refusal_status)` its message declares (there is no default).
 /// Every refusal message of the domain layer implements it; a

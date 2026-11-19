@@ -1,4 +1,4 @@
-//! LedgerViewImpl: the implementation of `LedgerView`, the generated domain layer's
+//! LedgerViewImpl: the implementation of `LedgerViewInterface`, the generated domain layer's
 //! interface, written once by `angzarr scaffold rust` and yours from then on:
 //! `--missing` adds the required methods it lacks, each `todo!()`.
 
@@ -10,7 +10,7 @@ pub struct LedgerViewImpl {
     pub state: crate::wire::LedgerView,
 }
 
-impl LedgerView for LedgerViewImpl {
+impl LedgerViewInterface for LedgerViewImpl {
     async fn posted(&mut self, _event: &Posted, ctx: &ProjectionContext) -> Result<(), Bug> {
         self.state.seen += 1;
         println!("view: Posted from {} ({})", ctx.stream().domain, self.state.seen);

@@ -18,7 +18,7 @@ pub mod adapters {
         process_manager,
     };
     use crate::domain::*;
-    /// `buyin.v1.WalletState`, delegating to `crate::domain::WalletState`.
+    /// `buyin.v1.WalletState`, delegating to `crate::domain::WalletStateInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct WalletState(pub crate::wallet_state_impl::WalletStateImpl);
     impl std::ops::Deref for WalletState {
@@ -40,7 +40,7 @@ pub mod adapters {
             cmd: Deposit,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, Deposit>>> {
-            crate::domain::WalletState::deposit(&self.0, &cmd, ctx)
+            crate::domain::WalletStateInterface::deposit(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, Deposit>>>)
                 .map_err(DepositRefused::with_declared_status)
                 .map_err(Failed::widen)
@@ -51,7 +51,7 @@ pub mod adapters {
             cmd: Hold,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, Hold>>> {
-            crate::domain::WalletState::hold(&self.0, &cmd, ctx)
+            crate::domain::WalletStateInterface::hold(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, Hold>>>)
                 .map_err(InsufficientFunds::with_declared_status)
                 .map_err(Failed::widen)
@@ -62,24 +62,28 @@ pub mod adapters {
             fact: RecordBuyInRefused,
             ctx: &Context,
         ) -> Result<FactEmit<Self>, ::angzarr_embedded::markup::Bug> {
-            crate::domain::WalletState::record_buy_in_refused(&self.0, &fact, ctx)
+            crate::domain::WalletStateInterface::record_buy_in_refused(
+                    &self.0,
+                    &fact,
+                    ctx,
+                )
                 .map(Self::recorded)
                 .map_err(::angzarr_embedded::markup::Bug::from)
         }
         #[applies(BuyInRefusalRecorded)]
         fn buy_in_refusal_recorded(&mut self, event: BuyInRefusalRecorded) {
-            crate::domain::WalletState::apply_buy_in_refusal_recorded(
+            crate::domain::WalletStateInterface::apply_buy_in_refusal_recorded(
                 &mut self.0,
                 &event,
             );
         }
         #[applies(Deposited)]
         fn deposited(&mut self, event: Deposited) {
-            crate::domain::WalletState::apply_deposited(&mut self.0, &event);
+            crate::domain::WalletStateInterface::apply_deposited(&mut self.0, &event);
         }
         #[applies(Held)]
         fn held(&mut self, event: Held) {
-            crate::domain::WalletState::apply_held(&mut self.0, &event);
+            crate::domain::WalletStateInterface::apply_held(&mut self.0, &event);
         }
     }
     impl WalletState {
@@ -111,7 +115,20 @@ pub mod adapters {
             FactEmit::of(events.iter().map(|event| event.to_any()))
         }
     }
-    /// `buyin.v1.BuyInState`, delegating to `crate::domain::BuyInState`.
+    /// Its snapshots: the implementation's, as its interface takes them.
+    impl ::angzarr_embedded::markup::Snapshots for WalletState {
+        type Anchor = crate::domain::WalletState;
+        fn snapshot(&self) -> Option<crate::domain::WalletState> {
+            crate::domain::WalletStateInterface::snapshot(&self.0)
+        }
+        fn restore(
+            &mut self,
+            anchor: crate::domain::WalletState,
+        ) -> Result<(), ::angzarr_embedded::markup::Report> {
+            crate::domain::WalletStateInterface::restore(&mut self.0, anchor)
+        }
+    }
+    /// `buyin.v1.BuyInState`, delegating to `crate::domain::BuyInStateInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct BuyInState(pub crate::buy_in_state_impl::BuyInStateImpl);
     impl std::ops::Deref for BuyInState {
@@ -134,7 +151,7 @@ pub mod adapters {
             cmd: StartBuyIn,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, StartBuyIn>>> {
-            crate::domain::BuyInState::start_buy_in(&self.0, &cmd, ctx)
+            crate::domain::BuyInStateInterface::start_buy_in(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, StartBuyIn>>>)
                 .map_err(BuyInRefused::with_declared_status)
                 .map_err(Failed::widen)
@@ -145,7 +162,7 @@ pub mod adapters {
             cmd: RecordHeld,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, RecordHeld>>> {
-            crate::domain::BuyInState::record_held(&self.0, &cmd, ctx)
+            crate::domain::BuyInStateInterface::record_held(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, RecordHeld>>>)
                 .map_err(BuyInRefused::with_declared_status)
                 .map_err(Failed::widen)
@@ -156,21 +173,24 @@ pub mod adapters {
             fact: HoldLost,
             ctx: &Context,
         ) -> Result<FactEmit<Self>, ::angzarr_embedded::markup::Bug> {
-            crate::domain::BuyInState::hold_lost(&self.0, &fact, ctx)
+            crate::domain::BuyInStateInterface::hold_lost(&self.0, &fact, ctx)
                 .map(Self::recorded)
                 .map_err(::angzarr_embedded::markup::Bug::from)
         }
         #[applies(BuyInStarted)]
         fn buy_in_started(&mut self, event: BuyInStarted) {
-            crate::domain::BuyInState::apply_buy_in_started(&mut self.0, &event);
+            crate::domain::BuyInStateInterface::apply_buy_in_started(
+                &mut self.0,
+                &event,
+            );
         }
         #[applies(BuyInHeld)]
         fn buy_in_held(&mut self, event: BuyInHeld) {
-            crate::domain::BuyInState::apply_buy_in_held(&mut self.0, &event);
+            crate::domain::BuyInStateInterface::apply_buy_in_held(&mut self.0, &event);
         }
         #[applies(BuyInFailed)]
         fn buy_in_failed(&mut self, event: BuyInFailed) {
-            crate::domain::BuyInState::apply_buy_in_failed(&mut self.0, &event);
+            crate::domain::BuyInStateInterface::apply_buy_in_failed(&mut self.0, &event);
         }
     }
     impl BuyInState {
@@ -202,7 +222,20 @@ pub mod adapters {
             FactEmit::of(events.iter().map(|event| event.to_any()))
         }
     }
-    /// `buyin.v1.BuyInWalletPolicy`, delegating to `crate::domain::BuyInWalletPolicy`.
+    /// Its snapshots: the implementation's, as its interface takes them.
+    impl ::angzarr_embedded::markup::Snapshots for BuyInState {
+        type Anchor = crate::domain::BuyInState;
+        fn snapshot(&self) -> Option<crate::domain::BuyInState> {
+            crate::domain::BuyInStateInterface::snapshot(&self.0)
+        }
+        fn restore(
+            &mut self,
+            anchor: crate::domain::BuyInState,
+        ) -> Result<(), ::angzarr_embedded::markup::Report> {
+            crate::domain::BuyInStateInterface::restore(&mut self.0, anchor)
+        }
+    }
+    /// `buyin.v1.BuyInWalletPolicy`, delegating to `crate::domain::BuyInWalletPolicyInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct BuyInWalletPolicy(
         pub crate::buy_in_wallet_policy_impl::BuyInWalletPolicyImpl,
@@ -215,7 +248,7 @@ pub mod adapters {
             event: &BuyInStarted,
             ctx: &PolicyContext,
         ) -> ::core::result::Result<Commands<WalletState>, Bug> {
-            let orders = crate::domain::BuyInWalletPolicy::buy_in_started(
+            let orders = crate::domain::BuyInWalletPolicyInterface::buy_in_started(
                 &self.0,
                 &ctx.source_root().value,
                 event,
@@ -247,10 +280,15 @@ pub mod adapters {
             refused: &Refused,
         ) -> ::core::result::Result<BuyInStateFact, Bug> {
             let (command, refusal) = WalletStateRefusal::read(refused)?;
-            crate::domain::BuyInWalletPolicy::refused(&self.0, command, refusal, refused)
+            crate::domain::BuyInWalletPolicyInterface::refused(
+                &self.0,
+                command,
+                refusal,
+                refused,
+            )
         }
     }
-    /// `buyin.v1.WalletBuyInPolicy`, delegating to `crate::domain::WalletBuyInPolicy`.
+    /// `buyin.v1.WalletBuyInPolicy`, delegating to `crate::domain::WalletBuyInPolicyInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct WalletBuyInPolicy(
         pub crate::wallet_buy_in_policy_impl::WalletBuyInPolicyImpl,
@@ -263,7 +301,7 @@ pub mod adapters {
             event: &Held,
             ctx: &PolicyContext,
         ) -> ::core::result::Result<Commands<BuyInState>, Bug> {
-            let orders = crate::domain::WalletBuyInPolicy::held(
+            let orders = crate::domain::WalletBuyInPolicyInterface::held(
                 &self.0,
                 &ctx.source_root().value,
                 event,
@@ -297,7 +335,12 @@ pub mod adapters {
             refused: &Refused,
         ) -> ::core::result::Result<WalletStateFact, Bug> {
             let (command, refusal) = BuyInStateRefusal::read(refused)?;
-            crate::domain::WalletBuyInPolicy::refused(&self.0, command, refusal, refused)
+            crate::domain::WalletBuyInPolicyInterface::refused(
+                &self.0,
+                command,
+                refusal,
+                refused,
+            )
         }
     }
 }

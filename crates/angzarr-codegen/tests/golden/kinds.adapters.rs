@@ -18,7 +18,7 @@ pub mod adapters {
         projector, projects,
     };
     use crate::domain::*;
-    /// `kinds.v1.LedgerState`, delegating to `crate::domain::LedgerState`.
+    /// `kinds.v1.LedgerState`, delegating to `crate::domain::LedgerStateInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct LedgerState(pub crate::ledger_state_impl::LedgerStateImpl);
     impl std::ops::Deref for LedgerState {
@@ -43,7 +43,7 @@ pub mod adapters {
             cmd: Post,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, Post>>> {
-            crate::domain::LedgerState::post(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::post(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, Post>>>)
                 .map_err(PostRefuses::with_declared_status)
                 .map_err(PostRefuses::widen)
@@ -54,7 +54,7 @@ pub mod adapters {
             cmd: Open,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Unrefusable>> {
-            crate::domain::LedgerState::open(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::open(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Unrefusable>>)
         }
         #[handles_cmd(Four)]
@@ -63,7 +63,7 @@ pub mod adapters {
             cmd: Four,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Unrefusable>> {
-            crate::domain::LedgerState::four(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::four(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Unrefusable>>)
         }
         #[handles_cmd(Maybe)]
@@ -72,7 +72,7 @@ pub mod adapters {
             cmd: Maybe,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Unrefusable>> {
-            crate::domain::LedgerState::maybe(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::maybe(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Unrefusable>>)
         }
         #[handles_cmd(MaybeBoth)]
@@ -81,7 +81,7 @@ pub mod adapters {
             cmd: MaybeBoth,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Unrefusable>> {
-            crate::domain::LedgerState::maybe_both(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::maybe_both(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Unrefusable>>)
         }
         #[handles_cmd(Batch, refuses(PostRefused))]
@@ -90,7 +90,7 @@ pub mod adapters {
             cmd: Batch,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, Batch>>> {
-            crate::domain::LedgerState::batch(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::batch(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, Batch>>>)
                 .map_err(PostRefused::with_declared_status)
                 .map_err(Failed::widen)
@@ -101,7 +101,7 @@ pub mod adapters {
             cmd: Raw,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Unrefusable>> {
-            crate::domain::LedgerState::raw(&self.0, &cmd, ctx)
+            crate::domain::LedgerStateInterface::raw(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Unrefusable>>)
         }
         #[handles_fact(Arrived)]
@@ -110,7 +110,7 @@ pub mod adapters {
             fact: Arrived,
             ctx: &Context,
         ) -> Result<FactEmit<Self>, ::angzarr_embedded::markup::Bug> {
-            crate::domain::LedgerState::arrived(&self.0, &fact, ctx)
+            crate::domain::LedgerStateInterface::arrived(&self.0, &fact, ctx)
                 .map(Self::recorded)
                 .map_err(::angzarr_embedded::markup::Bug::from)
         }
@@ -120,25 +120,25 @@ pub mod adapters {
             fact: Swept,
             ctx: &Context,
         ) -> Result<FactEmit<Self>, ::angzarr_embedded::markup::Bug> {
-            crate::domain::LedgerState::swept(&self.0, &fact, ctx)
+            crate::domain::LedgerStateInterface::swept(&self.0, &fact, ctx)
                 .map(Self::recorded)
                 .map_err(::angzarr_embedded::markup::Bug::from)
         }
         #[applies(Posted)]
         fn posted(&mut self, event: Posted) {
-            crate::domain::LedgerState::apply_posted(&mut self.0, &event);
+            crate::domain::LedgerStateInterface::apply_posted(&mut self.0, &event);
         }
         #[applies(Noted)]
         fn noted(&mut self, event: Noted) {
-            crate::domain::LedgerState::apply_noted(&mut self.0, &event);
+            crate::domain::LedgerStateInterface::apply_noted(&mut self.0, &event);
         }
         #[applies(Cleared)]
         fn cleared(&mut self, event: Cleared) {
-            crate::domain::LedgerState::apply_cleared(&mut self.0, &event);
+            crate::domain::LedgerStateInterface::apply_cleared(&mut self.0, &event);
         }
         #[applies(Closed)]
         fn closed(&mut self, event: Closed) {
-            crate::domain::LedgerState::apply_closed(&mut self.0, &event);
+            crate::domain::LedgerStateInterface::apply_closed(&mut self.0, &event);
         }
     }
     impl LedgerState {
@@ -173,7 +173,20 @@ pub mod adapters {
             FactEmit::of(events.iter().map(|event| event.to_any()))
         }
     }
-    /// `kinds.v1.AuditState`, delegating to `crate::domain::AuditState`.
+    /// Its snapshots: the implementation's, as its interface takes them.
+    impl ::angzarr_embedded::markup::Snapshots for LedgerState {
+        type Anchor = crate::domain::LedgerState;
+        fn snapshot(&self) -> Option<crate::domain::LedgerState> {
+            crate::domain::LedgerStateInterface::snapshot(&self.0)
+        }
+        fn restore(
+            &mut self,
+            anchor: crate::domain::LedgerState,
+        ) -> Result<(), ::angzarr_embedded::markup::Report> {
+            crate::domain::LedgerStateInterface::restore(&mut self.0, anchor)
+        }
+    }
+    /// `kinds.v1.AuditState`, delegating to `crate::domain::AuditStateInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct AuditState(pub crate::audit_state_impl::AuditStateImpl);
     impl std::ops::Deref for AuditState {
@@ -191,14 +204,14 @@ pub mod adapters {
             cmd: Audit,
             ctx: &Context,
         ) -> Result<Emit<Self>, Failed<Refuses<Self, Audit>>> {
-            crate::domain::AuditState::audit(&self.0, &cmd, ctx)
+            crate::domain::AuditStateInterface::audit(&self.0, &cmd, ctx)
                 .map(Self::emitted::<Failed<Refuses<Self, Audit>>>)
                 .map_err(AuditRefuses::with_declared_status)
                 .map_err(AuditRefuses::widen)
         }
         #[applies(Audited)]
         fn audited(&mut self, event: Audited) {
-            crate::domain::AuditState::apply_audited(&mut self.0, &event);
+            crate::domain::AuditStateInterface::apply_audited(&mut self.0, &event);
         }
     }
     impl AuditState {
@@ -219,7 +232,20 @@ pub mod adapters {
                 )
         }
     }
-    /// `kinds.v1.LedgerView`, delegating to `crate::domain::LedgerView`.
+    /// Its snapshots: the implementation's, as its interface takes them.
+    impl ::angzarr_embedded::markup::Snapshots for AuditState {
+        type Anchor = crate::domain::AuditState;
+        fn snapshot(&self) -> Option<crate::domain::AuditState> {
+            crate::domain::AuditStateInterface::snapshot(&self.0)
+        }
+        fn restore(
+            &mut self,
+            anchor: crate::domain::AuditState,
+        ) -> Result<(), ::angzarr_embedded::markup::Report> {
+            crate::domain::AuditStateInterface::restore(&mut self.0, anchor)
+        }
+    }
+    /// `kinds.v1.LedgerView`, delegating to `crate::domain::LedgerViewInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct LedgerView(pub crate::ledger_view_impl::LedgerViewImpl);
     #[projector(name = "projector-ledger-view", sources = ["ledger", "audit"])]
@@ -230,7 +256,7 @@ pub mod adapters {
             event: &Posted,
             ctx: &ProjectionContext,
         ) -> Result<(), Report> {
-            crate::domain::LedgerView::posted(&mut self.0, event, ctx)
+            crate::domain::LedgerViewInterface::posted(&mut self.0, event, ctx)
                 .await
                 .map_err(|bug| Report::of(&bug))
         }
@@ -240,12 +266,12 @@ pub mod adapters {
             event: &Audited,
             ctx: &ProjectionContext,
         ) -> Result<(), Report> {
-            crate::domain::LedgerView::audited(&mut self.0, event, ctx)
+            crate::domain::LedgerViewInterface::audited(&mut self.0, event, ctx)
                 .await
                 .map_err(|bug| Report::of(&bug))
         }
     }
-    /// `kinds.v1.LedgerAuditPolicy`, delegating to `crate::domain::LedgerAuditPolicy`.
+    /// `kinds.v1.LedgerAuditPolicy`, delegating to `crate::domain::LedgerAuditPolicyInterface`.
     #[derive(Clone, Debug, Default)]
     pub struct LedgerAuditPolicy(
         pub crate::ledger_audit_policy_impl::LedgerAuditPolicyImpl,
@@ -258,7 +284,7 @@ pub mod adapters {
             event: &Noted,
             ctx: &PolicyContext,
         ) -> ::core::result::Result<Commands<AuditState>, Bug> {
-            let orders = crate::domain::LedgerAuditPolicy::noted(
+            let orders = crate::domain::LedgerAuditPolicyInterface::noted(
                 &self.0,
                 &ctx.source_root().value,
                 event,
@@ -284,7 +310,12 @@ pub mod adapters {
             refused: &Refused,
         ) -> ::core::result::Result<LedgerStateFact, Bug> {
             let (command, refusal) = AuditStateRefusal::read(refused)?;
-            crate::domain::LedgerAuditPolicy::refused(&self.0, command, refusal, refused)
+            crate::domain::LedgerAuditPolicyInterface::refused(
+                &self.0,
+                command,
+                refusal,
+                refused,
+            )
         }
     }
 }

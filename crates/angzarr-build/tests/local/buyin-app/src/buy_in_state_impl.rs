@@ -8,7 +8,7 @@ pub struct BuyInStateImpl {
     pub state: crate::wire::BuyInState,
 }
 
-impl BuyInState for BuyInStateImpl {
+impl BuyInStateInterface for BuyInStateImpl {
     fn start_buy_in(
         &self,
         cmd: &StartBuyIn,

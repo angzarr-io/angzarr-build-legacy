@@ -37,12 +37,14 @@ fn domain(w: &mut Generator) -> syn::File {
     syn::parse_file(&source).unwrap_or_else(|e| panic!("{e}:\n{source}"))
 }
 
-/// The trait named `name`.
+/// The interface of the component anchored on `name`: its trait,
+/// `<name>Interface`.
 fn interface(file: &syn::File, name: &str) -> syn::ItemTrait {
+    let trait_name = format!("{name}Interface");
     file.items
         .iter()
         .find_map(|item| match item {
-            syn::Item::Trait(t) if t.ident == name => Some(t.clone()),
+            syn::Item::Trait(t) if t.ident == trait_name => Some(t.clone()),
             _ => None,
         })
         .unwrap_or_else(|| panic!("no trait {name}"))

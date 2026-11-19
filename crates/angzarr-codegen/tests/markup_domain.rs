@@ -87,7 +87,7 @@ fn impls(file: &syn::File) -> Vec<(String, String)> {
 }
 
 #[test]
-fn test_markup_domain_implements_domain_message_for_every_input_event_and_refusal() {
+fn test_markup_domain_implements_domain_message_for_every_anchor_input_event_and_refusal() {
     let impls = impls(&buyin());
     let mut messages: Vec<&str> = impls
         .iter()
@@ -103,6 +103,7 @@ fn test_markup_domain_implements_domain_message_for_every_input_event_and_refusa
             "BuyInRefusalRecorded",
             "BuyInRefused",
             "BuyInStarted",
+            "BuyInState",
             "Deposit",
             "DepositRefused",
             "Deposited",
@@ -113,6 +114,7 @@ fn test_markup_domain_implements_domain_message_for_every_input_event_and_refusa
             "RecordBuyInRefused",
             "RecordHeld",
             "StartBuyIn",
+            "WalletState",
         ]
     );
 }
@@ -657,7 +659,9 @@ fn test_a_policys_interface_is_its_targets_layers() {
         .expect("one layer, the depot's");
     assert_eq!(layers.len(), 1);
     assert!(
-        layers[0].source.contains("pub trait RoutePolicy {"),
+        layers[0]
+            .source
+            .contains("pub trait RoutePolicyInterface {"),
         "{}",
         layers[0].source
     );

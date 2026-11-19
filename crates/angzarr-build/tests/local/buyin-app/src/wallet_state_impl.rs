@@ -8,7 +8,7 @@ pub struct WalletStateImpl {
     pub state: crate::wire::WalletState,
 }
 
-impl WalletState for WalletStateImpl {
+impl WalletStateInterface for WalletStateImpl {
     fn deposit(
         &self,
         cmd: &Deposit,

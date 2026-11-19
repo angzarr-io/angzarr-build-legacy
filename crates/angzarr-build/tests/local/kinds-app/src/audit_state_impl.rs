@@ -1,4 +1,4 @@
-//! AuditStateImpl: the implementation of `AuditState`, the generated domain layer's
+//! AuditStateImpl: the implementation of `AuditStateInterface`, the generated domain layer's
 //! interface, written once by `angzarr scaffold rust` and yours from then on:
 //! `--missing` adds the required methods it lacks, each `todo!()`.
 
@@ -10,7 +10,7 @@ pub struct AuditStateImpl {
     pub state: crate::wire::AuditState,
 }
 
-impl AuditState for AuditStateImpl {
+impl AuditStateInterface for AuditStateImpl {
     /// Audits every root but 2, which it refuses with one of its two
     /// refusal types: the policy that sent it translates the refusal.
     fn audit(

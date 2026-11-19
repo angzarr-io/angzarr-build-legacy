@@ -3,10 +3,10 @@
 # (shapes.catalog.v1 and shapes.order.v1, each anchored on its state) and
 # one of types alone, each package's domain layer at its own path. The
 # generated adapters, register() and the scaffold of the day (written there
-# by the test, never committed) type-check; an aggregate written by hand,
-# as an application writes one, snapshots as its anchor's wire type and
-# resumes from it. A workspace of its own, outside angzarr-build's. Its
-# Cargo.lock is a build artifact, ignored.
+# by the test, never committed) type-check; the orders, whose angzarr.yaml
+# entry sets `scaffold.snapshots`, snapshot as their anchor's wire type and
+# resume from it, and the catalog takes none. A workspace of its own,
+# outside angzarr-build's. Its Cargo.lock is a build artifact, ignored.
 [package]
 name = "anchors-app"
 version = "0.0.0"
@@ -17,8 +17,8 @@ publish = false
 
 # The family's pins, as the other fixtures'.
 [dependencies]
-angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "23a507fa952d498bca5647aa36c9e9e24128e403" }
-angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "23a507fa952d498bca5647aa36c9e9e24128e403" }
+angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "cc3c07d8ebbce19b0cc6bb639a9490516a2808fd" }
+angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "cc3c07d8ebbce19b0cc6bb639a9490516a2808fd" }
 angzarr-proto = { git = "https://github.com/angzarr-io/angzarr", rev = "03663846fc7609378739f616e785e88b99ba0a1c" }
 angzarr-router = { git = "https://github.com/angzarr-io/angzarr-router", rev = "5e887e163a2712e35e213f0d79f9755418a7c0df" }
 prost = "0.14"

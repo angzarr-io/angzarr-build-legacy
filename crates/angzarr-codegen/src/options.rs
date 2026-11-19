@@ -57,12 +57,6 @@ fn message(m: &MessageDescriptor) -> Option<DynamicMessage> {
     declared(m.parent_pool(), &m.options(), MESSAGE)
 }
 
-/// Whether the component anchor `m` is its component's state
-/// (`MessageCodegen.state`).
-pub(crate) fn is_state(m: &MessageDescriptor) -> bool {
-    flag(message(m), "state")
-}
-
 /// The id newtype a UUID field declares (`FieldCodegen.id_type`), if any.
 pub(crate) fn id_type(f: &FieldDescriptor) -> Option<String> {
     Some(string(field(f), "id_type")).filter(|s| !s.is_empty())

@@ -103,6 +103,19 @@ impl TryFrom<i32> for MislabeledCause {
     }
 }
 #[derive(Clone, Debug, Default, PartialEq)]
+pub struct LedgerState {}
+impl From<LedgerState> for crate::wire::LedgerState {
+    fn from(_value: LedgerState) -> Self {
+        crate::wire::LedgerState {}
+    }
+}
+impl TryFrom<crate::wire::LedgerState> for LedgerState {
+    type Error = ::angzarr_embedded::WireError;
+    fn try_from(_value: crate::wire::LedgerState) -> Result<Self, Self::Error> {
+        Ok(LedgerState {})
+    }
+}
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Post {}
 impl From<Post> for crate::wire::Post {
     fn from(_value: Post) -> Self {
@@ -482,6 +495,19 @@ impl TryFrom<crate::wire::Closed> for Closed {
     }
 }
 #[derive(Clone, Debug, Default, PartialEq)]
+pub struct AuditState {}
+impl From<AuditState> for crate::wire::AuditState {
+    fn from(_value: AuditState) -> Self {
+        crate::wire::AuditState {}
+    }
+}
+impl TryFrom<crate::wire::AuditState> for AuditState {
+    type Error = ::angzarr_embedded::WireError;
+    fn try_from(_value: crate::wire::AuditState) -> Result<Self, Self::Error> {
+        Ok(AuditState {})
+    }
+}
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Audit {}
 impl From<Audit> for crate::wire::Audit {
     fn from(_value: Audit) -> Self {
@@ -551,6 +577,9 @@ pub use ::angzarr_embedded::markup::Compensation;
 pub use ::angzarr_embedded::markup::{
     BusinessStatus, Failed, RetryableStatus, Unrefusable,
 };
+/// Why an aggregate's or a process manager's `restore` refuses a
+/// snapshot: a diagnostic key and its args, never text.
+pub use ::angzarr_embedded::markup::Report;
 /// A typed refusal message: the status it is refused under, the
 /// `(refusal_status)` its message declares (there is no default).
 /// Every refusal message of the domain layer implements it; a
@@ -1761,6 +1790,17 @@ const _: fn(&crate::wire::PostRefused) = |wire| {
     wire_settings::bytes(&wire.data);
     wire_settings::map(&wire.table);
 };
+impl ::angzarr_embedded::markup::DomainMessage for LedgerState {
+    type Wire = crate::wire::LedgerState;
+    fn to_wire(&self) -> crate::wire::LedgerState {
+        crate::wire::LedgerState::from(self.clone())
+    }
+    fn from_wire(
+        wire: crate::wire::LedgerState,
+    ) -> Result<Self, ::angzarr_embedded::WireError> {
+        LedgerState::try_from(wire)
+    }
+}
 impl ::angzarr_embedded::markup::DomainMessage for Post {
     type Wire = crate::wire::Post;
     fn to_wire(&self) -> crate::wire::Post {
@@ -1957,6 +1997,17 @@ impl ::angzarr_embedded::markup::DomainMessage for Closed {
         Closed::try_from(wire)
     }
 }
+impl ::angzarr_embedded::markup::DomainMessage for AuditState {
+    type Wire = crate::wire::AuditState;
+    fn to_wire(&self) -> crate::wire::AuditState {
+        crate::wire::AuditState::from(self.clone())
+    }
+    fn from_wire(
+        wire: crate::wire::AuditState,
+    ) -> Result<Self, ::angzarr_embedded::WireError> {
+        AuditState::try_from(wire)
+    }
+}
 impl ::angzarr_embedded::markup::DomainMessage for Audit {
     type Wire = crate::wire::Audit;
     fn to_wire(&self) -> crate::wire::Audit {
@@ -1980,15 +2031,20 @@ impl ::angzarr_embedded::markup::DomainMessage for Audited {
     }
 }
 
-/// LedgerState: the interface of `kinds.v1.LedgerState`, generated from its
-/// protos: its implementation, `LedgerStateImpl`, is yours (`angzarr scaffold
-/// rust` writes it once), and the generated adapter (`adapters::LedgerState`)
-/// carries the markup and calls it.
+/// LedgerStateInterface: the interface of `kinds.v1.LedgerState`, generated
+/// from its protos: its implementation, `LedgerStateImpl`, is yours (`angzarr
+/// scaffold rust` writes it once), and the generated adapter
+/// (`adapters::LedgerState`) carries the markup and calls it.
 ///
 /// Each handler takes its input and its `Context`; each `apply_` folds an
 /// event.
+///
+/// `snapshot` and `restore` are its snapshots, its state as the anchor's domain
+/// type, which angzarr-embedded stores as the anchor's wire type and resumes a
+/// fresh implementation from (`markup::Snapshots`). Their defaults take none;
+/// overriding both opts in.
 #[allow(clippy::result_large_err)]
-pub trait LedgerState {
+pub trait LedgerStateInterface {
     fn post(&self, cmd: &Post, ctx: &Context) -> Result<Vec<LedgerStateEvent>, Failed<PostRefuses>>;
 
     fn open(&self, cmd: &Open, ctx: &Context) -> Result<Vec<LedgerStateEvent>, Failed<Unrefusable>>;
@@ -2026,17 +2082,33 @@ pub trait LedgerState {
     fn apply_cleared(&mut self, event: &Cleared);
 
     fn apply_closed(&mut self, event: &Closed);
+
+    fn snapshot(&self) -> Option<LedgerState> {
+        None
+    }
+
+    fn restore(&mut self, state: LedgerState) -> Result<(), Report> {
+        let _ = state;
+        Err(Report::of(&::angzarr_embedded::NotSnapshotted::of::<
+            <LedgerState as ::angzarr_embedded::markup::DomainMessage>::Wire,
+        >()))
+    }
 }
 
-/// AuditState: the interface of `kinds.v1.AuditState`, generated from its
-/// protos: its implementation, `AuditStateImpl`, is yours (`angzarr scaffold
-/// rust` writes it once), and the generated adapter (`adapters::AuditState`)
-/// carries the markup and calls it.
+/// AuditStateInterface: the interface of `kinds.v1.AuditState`, generated from
+/// its protos: its implementation, `AuditStateImpl`, is yours (`angzarr
+/// scaffold rust` writes it once), and the generated adapter
+/// (`adapters::AuditState`) carries the markup and calls it.
 ///
 /// Each handler takes its input and its `Context`; each `apply_` folds an
 /// event.
+///
+/// `snapshot` and `restore` are its snapshots, its state as the anchor's domain
+/// type, which angzarr-embedded stores as the anchor's wire type and resumes a
+/// fresh implementation from (`markup::Snapshots`). Their defaults take none;
+/// overriding both opts in.
 #[allow(clippy::result_large_err)]
-pub trait AuditState {
+pub trait AuditStateInterface {
     fn audit(
         &self,
         cmd: &Audit,
@@ -2044,17 +2116,28 @@ pub trait AuditState {
     ) -> Result<Vec<AuditStateEvent>, Failed<AuditRefuses>>;
 
     fn apply_audited(&mut self, event: &Audited);
+
+    fn snapshot(&self) -> Option<AuditState> {
+        None
+    }
+
+    fn restore(&mut self, state: AuditState) -> Result<(), Report> {
+        let _ = state;
+        Err(Report::of(&::angzarr_embedded::NotSnapshotted::of::<
+            <AuditState as ::angzarr_embedded::markup::DomainMessage>::Wire,
+        >()))
+    }
 }
 
-/// LedgerView: the interface of `kinds.v1.LedgerView`, generated from its
-/// protos: its implementation, `LedgerViewImpl`, is yours (`angzarr scaffold
-/// rust` writes it once), and the generated adapter (`adapters::LedgerView`)
-/// carries the markup and calls it.
+/// LedgerViewInterface: the interface of `kinds.v1.LedgerView`, generated from
+/// its protos: its implementation, `LedgerViewImpl`, is yours (`angzarr
+/// scaffold rust` writes it once), and the generated adapter
+/// (`adapters::LedgerView`) carries the markup and calls it.
 ///
 /// One async method per projected event, of any of its source domains
 /// (`ctx.stream()` says which), returning its `Bug` when the projection fails.
 #[allow(clippy::result_large_err)]
-pub trait LedgerView {
+pub trait LedgerViewInterface {
     fn posted(
         &mut self,
         event: &Posted,
@@ -2068,9 +2151,9 @@ pub trait LedgerView {
     ) -> impl std::future::Future<Output = Result<(), Bug>> + Send;
 }
 
-/// LedgerAuditPolicy: the interface of `kinds.v1.LedgerAuditPolicy`, generated
-/// from its protos: its implementation, `LedgerAuditPolicyImpl`, is yours
-/// (`angzarr scaffold rust` writes it once), and the generated adapter
+/// LedgerAuditPolicyInterface: the interface of `kinds.v1.LedgerAuditPolicy`,
+/// generated from its protos: its implementation, `LedgerAuditPolicyImpl`, is
+/// yours (`angzarr scaffold rust` writes it once), and the generated adapter
 /// (`adapters::LedgerAuditPolicy`) carries the markup and calls it.
 ///
 /// Each reaction takes the source stream's root, the event and its context, and
@@ -2082,7 +2165,7 @@ pub trait LedgerView {
 /// target's refusal messages (a missing arm does not compile), and answers one
 /// of the source's facts, or its `Bug`: it cannot decline.
 #[allow(clippy::result_large_err)]
-pub trait LedgerAuditPolicy {
+pub trait LedgerAuditPolicyInterface {
     fn noted(
         &self,
         source: &[u8],

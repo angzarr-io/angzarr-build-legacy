@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use angzarr_build::{
-    BuildError, Existing, Scaffolded, adapters_into, adapters_with_into, json_into,
+    BuildError, Existing, ScaffoldConfig, Scaffolded, adapters_into, adapters_with_into, json_into,
     markup_domain_into, markup_domain_with_into, scaffold_with_into, wire_into,
 };
 
@@ -100,8 +100,16 @@ fn test_scaffold_with_into_imports_each_packages_layer_at_its_path() {
         ("shapes.catalog.v1", "crate::catalog"),
         ("shapes.order.v1", "crate::order"),
     ];
-    let done =
-        scaffold_with_into(&src, SHAPES, &[&fixtures()], Existing::Keep, &[], &domain).unwrap();
+    let done = scaffold_with_into(
+        &src,
+        SHAPES,
+        &[&fixtures()],
+        Existing::Keep,
+        &[],
+        &domain,
+        &ScaffoldConfig::default(),
+    )
+    .unwrap();
     assert!(
         done.contains(&Scaffolded::Created(src.join("order_state_impl.rs"))),
         "{done:?}"

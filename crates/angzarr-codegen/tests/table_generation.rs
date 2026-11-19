@@ -98,9 +98,9 @@ fn test_scaffold_writes_the_ledger_projectors_interface_and_implementation() {
     let files = scaffold(&descriptors(BLACKJACK), &[LEDGER]).unwrap();
     let interface = one(markup_domain(&descriptors(BLACKJACK), &[LEDGER], WIRE).unwrap());
     for expected in [
-        "pub trait TableLedgerProjection {",
+        "pub trait TableLedgerProjectionInterface {",
         "    fn round_settled(\n        &mut self,\n        event: &RoundSettled,\n        ctx: &ProjectionContext,\n    ) -> impl std::future::Future<Output = Result<(), Bug>> + Send;",
-        "pub trait WalletLedgerProjection {",
+        "pub trait WalletLedgerProjectionInterface {",
         "    fn funds_held(\n        &mut self,\n        event: &FundsHeld,\n        ctx: &ProjectionContext,\n    ) -> impl std::future::Future<Output = Result<(), Bug>> + Send;",
     ] {
         assert!(interface.contains(expected), "{expected}:\n{interface}");

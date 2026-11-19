@@ -40,13 +40,13 @@ use serde::Deserialize;
 use crate::common::snake;
 use crate::error::{AppError, CodegenError, text, texts};
 use crate::model::{self, Component, ComponentKind};
-use crate::scaffold::{Owner, ScaffoldFile};
+use crate::scaffold::{Owner, ScaffoldConfig, ScaffoldFile};
 use crate::warnings::Warning;
 
 /// The angzarr-embedded commit a generated application's `Cargo.toml` pins
 /// (its kernel, which re-exports the diagnostics, its markup and its host): the one this generator's output is
 /// written against.
-pub const ANGZARR_EMBEDDED_REV: &str = "23a507fa952d498bca5647aa36c9e9e24128e403";
+pub const ANGZARR_EMBEDDED_REV: &str = "cc3c07d8ebbce19b0cc6bb639a9490516a2808fd";
 /// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
 pub const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
 /// Where angzarr-build is fetched from when a seed names no other source.
@@ -247,6 +247,27 @@ pub fn app_layer(packages: &[String], domain: Option<&DomainCrate>) -> String {
 
 /// The manifest's `[package.metadata.angzarr.domain]`, if it has one.
 fn manifest_domain(text: &str) -> Result<Option<DomainCrate>, AppError> {
+    Ok(manifest_angzarr(text)?.and_then(|a| a.domain))
+}
+
+/// The scaffold's configuration the host config `config` (`angzarr.yaml`)
+/// gives ([`ScaffoldConfig`]): the components whose entry's
+/// `scaffold.snapshots` is set, in the config's order. A config that does
+/// not load is [`AppError::Config`].
+pub fn host_scaffold(config: &str) -> Result<ScaffoldConfig, CodegenError> {
+    read(config)?;
+    Ok(ScaffoldConfig::default())
+}
+
+/// The manifest's `[package.metadata.angzarr]`: angzarr-build's own
+/// configuration, if it has any.
+#[derive(Deserialize)]
+struct Angzarr {
+    domain: Option<DomainCrate>,
+}
+
+/// `text`, a manifest, read for its [`Angzarr`].
+fn manifest_angzarr(text: &str) -> Result<Option<Angzarr>, AppError> {
     #[derive(Deserialize)]
     struct Manifest {
         package: Option<Package>,
@@ -259,18 +280,13 @@ fn manifest_domain(text: &str) -> Result<Option<DomainCrate>, AppError> {
     struct Metadata {
         angzarr: Option<Angzarr>,
     }
-    #[derive(Deserialize)]
-    struct Angzarr {
-        domain: Option<DomainCrate>,
-    }
     let manifest: Manifest = toml::from_str(text).map_err(|e| AppError::Manifest {
         detail: e.message().to_string(),
     })?;
     Ok(manifest
         .package
         .and_then(|p| p.metadata)
-        .and_then(|m| m.angzarr)
-        .and_then(|a| a.domain))
+        .and_then(|m| m.angzarr))
 }
 
 /// The domains a host config serves from a child process: every

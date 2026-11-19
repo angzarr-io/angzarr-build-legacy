@@ -1,4 +1,4 @@
-//! LedgerStateImpl: the implementation of `LedgerState`, the generated domain layer's
+//! LedgerStateImpl: the implementation of `LedgerStateInterface`, the generated domain layer's
 //! interface, written once by `angzarr scaffold rust` and yours from then on:
 //! `--missing` adds the required methods it lacks, each `todo!()`.
 
@@ -10,7 +10,7 @@ pub struct LedgerStateImpl {
     pub state: crate::wire::LedgerState,
 }
 
-impl LedgerState for LedgerStateImpl {
+impl LedgerStateInterface for LedgerStateImpl {
     /// Always refused: over the limit, with every kind of arg set.
     fn post(
         &self,

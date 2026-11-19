@@ -42,6 +42,8 @@ fn test_every_handler_returns_a_list_of_its_components_events() {
             "{expected}:\n{source}"
         );
     }
+    // Their snapshots are no handler: `snapshot` alone returns an `Option`.
+    let handlers = source.replace("fn snapshot(&self) -> Option<", "");
     for shape in [
         "-> Option<",
         "-> Result<Option<",
@@ -49,7 +51,7 @@ fn test_every_handler_returns_a_list_of_its_components_events() {
         "-> (",
         "Result<Posted,",
     ] {
-        assert!(!source.contains(shape), "{shape} in:\n{source}");
+        assert!(!handlers.contains(shape), "{shape} in:\n{source}");
     }
 }
 
@@ -69,7 +71,7 @@ fn test_the_adapter_hands_the_markup_a_step_per_event() {
         // Each handler names its failure, or records.
         ".map(Self::emitted::<Failed<Refuses<Self,Batch>>>)",
         ".map(Self::emitted::<Failed<Unrefusable>>)",
-        "crate::domain::LedgerState::arrived(&self.0,&fact,ctx).map(Self::recorded)",
+        "crate::domain::LedgerStateInterface::arrived(&self.0,&fact,ctx).map(Self::recorded)",
     ] {
         assert!(flat.contains(expected), "{expected}:\n{source}");
     }

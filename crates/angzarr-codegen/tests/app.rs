@@ -272,7 +272,7 @@ fn the_generated_blackjack_config_is_the_one_its_e2e_hand_writes() {
     // its kind (the owner's config rulings): the table, the player a
     // Python child, the two policies between them in process; the wallet
     // policy's target is not in the application, so it is not listed.
-    let hand = "schema_version: 3\
+    let hand = "schema_version: 4\
                 \ncomponent:\
                 \n  - name: table\
                 \n    kind: domain\
@@ -807,7 +807,7 @@ fn lint_app_refuses_what_is_not_the_hosts_config() {
     // newer version.
     for config in [
         "[[component]]\nname = \"table\"\nkind = \"domain\"\nlanguage = \"rust\"\n",
-        "schema_version: 4\n",
+        "schema_version: 5\n",
     ] {
         assert!(
             matches!(
@@ -825,15 +825,15 @@ fn lint_app_refuses_what_is_not_the_hosts_config() {
 #[test]
 fn an_unstamped_or_older_config_lints_as_the_current_one() {
     let stamped = golden("blackjack", "angzarr.yaml");
-    assert!(stamped.contains("\nschema_version: 3\n"), "{stamped}");
-    for older in ["1", "2"] {
+    assert!(stamped.contains("\nschema_version: 4\n"), "{stamped}");
+    for older in ["1", "2", "3"] {
         let config = stamped.replace(
-            "\nschema_version: 3\n",
+            "\nschema_version: 4\n",
             &format!("\nschema_version: {older}\n"),
         );
         assert_eq!(lints(&config, BLACKJACK), [], "version {older}");
     }
-    let unstamped = stamped.replace("\nschema_version: 3\n", "\n");
+    let unstamped = stamped.replace("\nschema_version: 4\n", "\n");
     assert_eq!(lints(&unstamped, BLACKJACK), []);
 }
 
@@ -1162,4 +1162,40 @@ fn a_manifests_domain_crate_is_read_from_its_metadata() {
         angzarr_codegen::manifest_domain_crate("[package]\nname = \"x\"\n").unwrap(),
         None
     );
+}
+
+/// The host config names the components whose scaffold takes snapshots,
+/// each by its entry's `scaffold.snapshots`, in the config's order; one
+/// setting none is the default, every component taking none; a config that
+/// does not load is refused as the config's.
+#[test]
+fn a_host_configs_scaffold_settings_are_the_scaffolds_configuration() {
+    let config = "schema_version: 4\ncomponent:\n\
+                  - {name: carts, kind: domain, language: rust, scaffold: {snapshots: true}}\n\
+                  - {name: pmg-checkout, kind: domain, language: rust, scaffold: {snapshots: true}}\n\
+                  - {name: stock, kind: domain, language: rust}\n\
+                  - {name: ledger, kind: domain, language: rust, scaffold: {snapshots: false}}\n";
+    assert_eq!(
+        angzarr_codegen::host_scaffold(config).unwrap(),
+        angzarr_codegen::ScaffoldConfig {
+            snapshots: vec!["carts".to_string(), "pmg-checkout".to_string()],
+        }
+    );
+    assert_eq!(
+        angzarr_codegen::host_scaffold("schema_version: 4\n").unwrap(),
+        angzarr_codegen::ScaffoldConfig::default()
+    );
+    let unknown = "schema_version: 4\ncomponent:\n\
+                   - {name: carts, kind: domain, language: rust, scaffold: {snapshot: true}}\n";
+    assert!(
+        matches!(
+            angzarr_codegen::host_scaffold(unknown),
+            Err(angzarr_codegen::CodegenError::App(
+                angzarr_codegen::AppError::Config { .. }
+            ))
+        ),
+        "{:?}",
+        angzarr_codegen::host_scaffold(unknown)
+    );
+    assert_eq!(angzarr_codegen::HOST_CONFIG, "angzarr.yaml");
 }

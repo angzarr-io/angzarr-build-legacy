@@ -1,7 +1,7 @@
 // Every shape the domain layer maps beyond scalars, lists and maps: another
 // package's types, angzarr's UUID (plain, optional, repeated and as an id
 // newtype), Duration, a oneof of each kind of arm, nested messages and a
-// nested enum; and a state anchor.
+// nested enum; and a component anchored on its state.
 syntax = "proto3";
 package shapes.order.v1;
 
@@ -18,7 +18,6 @@ message OrderState {
     component_name: "orders"
     aggregate: {domain: "orders"}
   };
-  option (io.angzarr.codegen.v1.message) = {state: true};
 
   optional google.protobuf.Timestamp placed_at = 1;
   repeated string skus = 2;

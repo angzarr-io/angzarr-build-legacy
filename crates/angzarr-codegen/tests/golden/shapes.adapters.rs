@@ -73,6 +73,22 @@ pub mod adapters {
                     )
             }
         }
+        /// Its snapshots: the implementation's, as its interface takes them.
+        impl ::angzarr_embedded::markup::Snapshots for CatalogState {
+            type Anchor = crate::domain::catalog::CatalogState;
+            fn snapshot(&self) -> Option<crate::domain::catalog::CatalogState> {
+                crate::domain::catalog::CatalogStateInterface::snapshot(&self.0)
+            }
+            fn restore(
+                &mut self,
+                anchor: crate::domain::catalog::CatalogState,
+            ) -> Result<(), ::angzarr_embedded::markup::Report> {
+                crate::domain::catalog::CatalogStateInterface::restore(
+                    &mut self.0,
+                    anchor,
+                )
+            }
+        }
     }
     pub use self::shapes_catalog_v1::*;
     /// The adapters of `shapes.order.v1`'s components, reading its layer.
@@ -135,6 +151,19 @@ pub mod adapters {
                             }
                         },
                     )
+            }
+        }
+        /// Its snapshots: the implementation's, as its interface takes them.
+        impl ::angzarr_embedded::markup::Snapshots for OrderState {
+            type Anchor = crate::domain::order::OrderState;
+            fn snapshot(&self) -> Option<crate::domain::order::OrderState> {
+                crate::domain::order::OrderStateInterface::snapshot(&self.0)
+            }
+            fn restore(
+                &mut self,
+                anchor: crate::domain::order::OrderState,
+            ) -> Result<(), ::angzarr_embedded::markup::Report> {
+                crate::domain::order::OrderStateInterface::restore(&mut self.0, anchor)
             }
         }
     }

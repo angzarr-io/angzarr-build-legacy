@@ -19,9 +19,12 @@ mod rust;
 mod scaffold;
 mod warnings;
 
+/// The host config's file name, `angzarr.yaml`, in an application's root:
+/// what [`app`] writes and [`host_scaffold`] reads.
+pub use angzarr_embedded_host_config::FILE_NAME as HOST_CONFIG;
 pub use app::{
     ANGZARR_BUILD_GIT, ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV, AppLint, AppSeed, DomainCrate,
-    Exposure, Linted, RetrySeed, app, app_layer, app_lint_samples, child_components,
+    Exposure, Linted, RetrySeed, app, app_layer, app_lint_samples, child_components, host_scaffold,
     in_process_components, lint_app, manifest_domain_crate, remote_domains,
 };
 pub use common::refusal_key;
@@ -107,8 +110,9 @@ pub use python::{
     scaffold_python,
 };
 pub use scaffold::{
-    Completion, Existing, Notes, Owner, PinDrift, ScaffoldFile, adapters, adapters_with, complete,
-    markup_domain, markup_domain_with, register, register_only, scaffold, scaffold_with, stand_ins,
+    Completion, Existing, Notes, Owner, PinDrift, ScaffoldConfig, ScaffoldFile, adapters,
+    adapters_with, complete, markup_domain, markup_domain_with, register, register_only, scaffold,
+    scaffold_with, stand_ins,
 };
 
 /// The modules of the prost types of `files`' packages, nested as the

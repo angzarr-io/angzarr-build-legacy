@@ -258,8 +258,8 @@ fn test_markup_domain_refuses_a_type_named_as_an_interface_or_a_fact_choice() {
     for (file, message, name, component) in [
         (
             "bad/v1/interface_name.proto",
-            "bad.v1.ShelfState",
-            "ShelfState",
+            "bad.v1.ShelfStateInterface",
+            "ShelfStateInterface",
             "bad.v1.ShelfState",
         ),
         (
