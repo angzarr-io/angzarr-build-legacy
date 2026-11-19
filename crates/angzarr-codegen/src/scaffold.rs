@@ -195,7 +195,8 @@ pub fn scaffold_with(
         let stem = snake(&component.name);
         let anchor = component.anchor.full_name().to_string();
         let methods = interface_methods(component, &pool)?;
-        let selected = false;
+        let selected =
+            component.kind.is_domain() && config.snapshots.contains(&component.component_name);
         let stubs: Vec<&Method> = methods
             .iter()
             .filter(|m| m.default.is_none() || selected)
@@ -1375,8 +1376,27 @@ fn domain_adapter(component: &Component, domain: &[(&str, &str)]) -> TokenStream
 /// aggregate's or process manager's `State` from it, the anchor's wire type
 /// its registered state type and what a snapshot holds.
 fn snapshots(component: &Component, adapter: &Adapter, domain: &[(&str, &str)]) -> TokenStream {
-    let _ = (component, adapter, domain);
-    TokenStream::new()
+    let Adapter {
+        name, interface, ..
+    } = adapter;
+    let layer: syn::Path =
+        syn::parse_str(rust_path(domain, component.anchor.package_name(), DOMAIN))
+            .expect("a path that parses");
+    let root = root();
+    quote! {
+        /// Its snapshots: the implementation's, as its interface takes them.
+        impl #root::markup::Snapshots for #name {
+            type Anchor = #layer::#name;
+
+            fn snapshot(&self) -> Option<#layer::#name> {
+                #interface::snapshot(&self.0)
+            }
+
+            fn restore(&mut self, anchor: #layer::#name) -> Result<(), #root::markup::Report> {
+                #interface::restore(&mut self.0, anchor)
+            }
+        }
+    }
 }
 
 /// A domain adapter's fold of `event`, delegating to `interface`.

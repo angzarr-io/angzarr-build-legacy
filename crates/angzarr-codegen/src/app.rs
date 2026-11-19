@@ -255,8 +255,13 @@ fn manifest_domain(text: &str) -> Result<Option<DomainCrate>, AppError> {
 /// `scaffold.snapshots` is set, in the config's order. A config that does
 /// not load is [`AppError::Config`].
 pub fn host_scaffold(config: &str) -> Result<ScaffoldConfig, CodegenError> {
-    read(config)?;
-    Ok(ScaffoldConfig::default())
+    let snapshots = read(config)?
+        .components
+        .into_iter()
+        .filter(|c| c.scaffold.snapshots)
+        .map(|c| c.name)
+        .collect();
+    Ok(ScaffoldConfig { snapshots })
 }
 
 /// The manifest's `[package.metadata.angzarr]`: angzarr-build's own
