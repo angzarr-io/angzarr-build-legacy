@@ -36,7 +36,10 @@ shared target directory: `buyin-app` and `kinds-app` (generated layer plus
 components with their bodies written; built and run), `blackjack-app` and
 `bare-app` (the blackjack example's protos, and a domain with no events: the
 generated layer plus the scaffold of the day, written there fresh and never
-committed, type-checked). They build the embedded runtime, so they are
+committed, type-checked). `anchors-app` is the shapes fixtures' state anchors in a
+crate whose components are in two packages, each package's layer at its own
+path: its generated adapters and the scaffold of the day type-checked, and
+aggregates written by hand snapshotting as their anchors' wire types. They build the embedded runtime, so they are
 `#[ignore]`d from a plain `cargo test` and from mutation runs: `just test`
 runs them after the rest, `just test-slow` alone.
 

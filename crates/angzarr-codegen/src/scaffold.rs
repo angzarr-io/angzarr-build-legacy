@@ -142,8 +142,8 @@ pub fn scaffold(descriptor_set: &[u8], files: &[&str]) -> Result<Vec<ScaffoldFil
 pub fn scaffold_with(
     descriptor_set: &[u8],
     files: &[&str],
-    _wire: &[(&str, &str)],
-    _domain: &[(&str, &str)],
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
 ) -> Result<Vec<ScaffoldFile>, CodegenError> {
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     let pool = model::pool_components(descriptor_set)?;
@@ -165,7 +165,7 @@ pub fn scaffold_with(
         out.push(ScaffoldFile::new(
             anchor,
             format!("{stem}_impl.rs"),
-            impl_source(component, &stubs),
+            impl_source(component, &stubs, wire, domain),
             Owner::User,
         ));
     }
@@ -429,15 +429,25 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
     out
 }
 
-fn impl_source(component: &Component, methods: &[&Method]) -> String {
+fn impl_source(
+    component: &Component,
+    methods: &[&Method],
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
+) -> String {
     let name = &component.name;
     let interface = &component.interface;
+    let package = component.anchor.package_name();
+    let (wire, domain) = (
+        rust_path(wire, package, WIRE),
+        rust_path(domain, package, DOMAIN),
+    );
     let mut out = format!(
         "//! {name}Impl: the implementation of `{interface}`, the generated domain layer's\n\
          //! interface, written once by `angzarr scaffold rust` and yours from then on:\n\
          //! `--missing` adds the required methods it lacks, each `todo!()`.\n\n"
     );
-    out.push_str("use crate::domain::*;\n\n");
+    out.push_str(&format!("use {domain}::*;\n\n"));
     if component.kind == ComponentKind::Policy {
         out.push_str(&format!(
             "#[derive(Clone, Debug, Default)]\npub struct {name}Impl;\n\n"
@@ -446,7 +456,7 @@ fn impl_source(component: &Component, methods: &[&Method]) -> String {
         out.push_str(&format!(
             "/// The projection the methods update.\n\
              #[derive(Clone, Debug, Default)]\n\
-             pub struct {name}Impl {{\n    pub state: crate::wire::{},\n}}\n\n",
+             pub struct {name}Impl {{\n    pub state: {wire}::{},\n}}\n\n",
             component.anchor.name()
         ));
     } else if component.state {
@@ -459,7 +469,7 @@ fn impl_source(component: &Component, methods: &[&Method]) -> String {
         out.push_str(&format!(
             "/// The state the `apply_` methods fold.\n\
              #[derive(Clone, Debug, Default)]\n\
-             pub struct {name}Impl {{\n    pub state: crate::wire::{},\n}}\n\n",
+             pub struct {name}Impl {{\n    pub state: {wire}::{},\n}}\n\n",
             component.anchor.name()
         ));
     }
@@ -875,11 +885,12 @@ pub fn adapters_with(
     descriptor_set: &[u8],
     files: &[&str],
     remote: &[&str],
-    _domain: &[(&str, &str)],
+    domain: &[(&str, &str)],
 ) -> Result<String, CodegenError> {
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     let root = root();
-    let mut items = TokenStream::new();
+    // Each package's adapters, in the order their components come.
+    let mut packages: Vec<(String, TokenStream)> = Vec::new();
     let mut markup = vec!["Context", "Emit"];
     let mut macros = vec![];
     let mut has_policy = false;
@@ -892,7 +903,7 @@ pub fn adapters_with(
             ComponentKind::Projector => {
                 markup.push("Report");
                 macros.extend(["projector", "projects"]);
-                projector_adapter(component)
+                projector_adapter(component, domain)
             }
             ComponentKind::Policy => {
                 has_policy = true;
@@ -904,7 +915,7 @@ pub fn adapters_with(
                     markup.push("Refused");
                     macros.push("on_refused");
                 }
-                policy_adapter(component, &components, refused)
+                policy_adapter(component, &components, refused, domain)
             }
             _ if is_remote => {
                 markup.extend(["CommandTarget", "EventSource"]);
@@ -920,10 +931,14 @@ pub fn adapters_with(
                 macros.extend(["applies", "handles_cmd", "handles_fact"]);
                 markup.extend(["Fails", "FactEmit", "Refuses"]);
                 macros.push(domain_markup(component.kind));
-                domain_adapter(component)
+                domain_adapter(component, domain)
             }
         };
-        items.extend(tokens);
+        let package = component.anchor.package_name();
+        match packages.iter_mut().find(|(p, _)| p == package) {
+            Some((_, items)) => items.extend(tokens),
+            None => packages.push((package.to_string(), tokens)),
+        }
     }
     markup.sort();
     markup.dedup();
@@ -946,6 +961,7 @@ pub fn adapters_with(
     } else {
         quote!()
     };
+    let layers = adapter_layers(packages, domain);
     let doc = " The adapter layer: each component's angzarr-embedded markup, every \
                handler delegating to the component's interface (the domain layer's \
                trait) on its implementation (the user's). A domain's handlers fail \
@@ -959,8 +975,7 @@ pub fn adapters_with(
             use #root::markup::{#(#markup),*};
             #uuid
             #macros
-            use crate::domain::*;
-            #items
+            #layers
         }
     });
     Ok(crate::headed(
@@ -974,25 +989,83 @@ pub fn adapters_with(
     ))
 }
 
+/// The domain layer of a package no path is given for.
+const DOMAIN: &str = "crate::domain";
+/// The wire types of a package no path is given for.
+const WIRE: &str = "crate::wire";
+
+/// The Rust path `paths` names for `package`, when it parses as a path,
+/// else `default`.
+fn rust_path<'a>(paths: &[(&'a str, &'a str)], package: &str, default: &'a str) -> &'a str {
+    paths
+        .iter()
+        .find(|(p, rust)| *p == package && syn::parse_str::<syn::Path>(rust).is_ok())
+        .map_or(default, |(_, rust)| rust)
+}
+
+/// The adapters of each package, reading its domain layer: over one layer,
+/// the adapters as they are, importing it; over several, each package's in
+/// a module of its own importing its layer (and the module above's
+/// imports), re-exported.
+fn adapter_layers(packages: Vec<(String, TokenStream)>, domain: &[(&str, &str)]) -> TokenStream {
+    let path = |package: &str| -> syn::Path {
+        syn::parse_str(rust_path(domain, package, DOMAIN)).expect("a path that parses")
+    };
+    let mut layers: Vec<&str> = packages
+        .iter()
+        .map(|(p, _)| rust_path(domain, p, DOMAIN))
+        .collect();
+    layers.dedup();
+    if let [] | [_] = layers.as_slice() {
+        let layer = path(layers.first().copied().unwrap_or(DOMAIN));
+        let items = packages.into_iter().map(|(_, items)| items);
+        return quote! {
+            use #layer::*;
+            #(#items)*
+        };
+    }
+    packages
+        .into_iter()
+        .map(|(package, items)| {
+            let layer = path(&package);
+            let module = format_ident!("{}", package.replace('.', "_"));
+            let doc = format!(" The adapters of `{package}`'s components, reading its layer.");
+            quote! {
+                #[doc = #doc]
+                mod #module {
+                    #[allow(unused_imports)]
+                    use super::*;
+                    use #layer::*;
+                    #items
+                }
+                pub use self::#module::*;
+            }
+        })
+        .collect()
+}
+
 /// A component's adapter: its type, wrapping the user's implementation,
 /// and the interface each of its handlers delegates to.
 struct Adapter {
     name: syn::Ident,
     /// The component's interface, the domain layer's trait,
-    /// `crate::domain::<Component>`.
+    /// `<its package's layer>::<Component>` (`crate::domain` by default).
     interface: TokenStream,
     /// The user's type it wraps, `crate::<stem>_impl::<Component>Impl`.
     implementation: TokenStream,
 }
 
 impl Adapter {
-    fn of(component: &Component) -> Adapter {
+    fn of(component: &Component, domain: &[(&str, &str)]) -> Adapter {
+        let layer: syn::Path =
+            syn::parse_str(rust_path(domain, component.anchor.package_name(), DOMAIN))
+                .expect("a path that parses");
         let stem_impl = format_ident!("{}_impl", snake(&component.name));
         let name = ident(&component.name);
         let name_impl = format_ident!("{}Impl", component.name);
         let interface = ident(&component.interface);
         Adapter {
-            interface: quote!(crate::domain::#interface),
+            interface: quote!(#layer::#interface),
             implementation: quote!(crate::#stem_impl::#name_impl),
             name,
         }
@@ -1083,8 +1156,8 @@ fn domain_markup(kind: ComponentKind) -> &'static str {
 
 /// A domain's adapter: its handler per input and fold per event, each
 /// delegating to its interface.
-fn domain_adapter(component: &Component) -> TokenStream {
-    let adapter = Adapter::of(component);
+fn domain_adapter(component: &Component, domain: &[(&str, &str)]) -> TokenStream {
+    let adapter = Adapter::of(component, domain);
     let declaration = adapter.declaration(component);
     let Adapter {
         name,
@@ -1321,8 +1394,13 @@ fn remote_domain(component: &Component) -> TokenStream {
 /// A policy's adapter: its reaction per event, each output in the arm its
 /// target declares, and, when its interface has one, its one
 /// `#[on_refused]` callback delegating to the interface's `refused`.
-fn policy_adapter(component: &Component, components: &[Component], refused: bool) -> TokenStream {
-    let adapter = Adapter::of(component);
+fn policy_adapter(
+    component: &Component,
+    components: &[Component],
+    refused: bool,
+    domain: &[(&str, &str)],
+) -> TokenStream {
+    let adapter = Adapter::of(component, domain);
     let declaration = adapter.declaration(component);
     let Adapter {
         name, interface, ..
@@ -1398,8 +1476,8 @@ fn policy_adapter(component: &Component, components: &[Component], refused: bool
     }
 }
 
-fn projector_adapter(component: &Component) -> TokenStream {
-    let adapter = Adapter::of(component);
+fn projector_adapter(component: &Component, domain: &[(&str, &str)]) -> TokenStream {
+    let adapter = Adapter::of(component, domain);
     let declaration = adapter.declaration(component);
     let Adapter {
         name, interface, ..

@@ -513,6 +513,12 @@ fn test_adapters_of_one_layer_are_one_module() {
     let plain = adapters(&set, SHAPES, &[]).unwrap();
     assert_eq!(adapters_with(&set, SHAPES, &[], &one).unwrap(), plain);
     assert_eq!(adapters_with(&set, SHAPES, &[], &[]).unwrap(), plain);
+    // A path that is not a Rust path is none given.
+    let unparsed = [
+        ("shapes.catalog.v1", "not a path"),
+        ("shapes.order.v1", "::"),
+    ];
+    assert_eq!(adapters_with(&set, SHAPES, &[], &unparsed).unwrap(), plain);
 }
 
 /// Each component's scaffold imports its own package's layer.
@@ -557,9 +563,13 @@ fn test_a_scaffolds_wire_state_is_at_its_packages_wire_path() {
         "{}",
         wallet.source
     );
+    let plain = scaffold(&set, BUYIN).unwrap();
+    assert_eq!(scaffold_with(&set, BUYIN, &[], &[]).unwrap(), plain);
+    // A path that is not a Rust path is none given.
+    let unparsed = [("buyin.v1", "not a path")];
     assert_eq!(
-        scaffold_with(&set, BUYIN, &[], &[]).unwrap(),
-        scaffold(&set, BUYIN).unwrap()
+        scaffold_with(&set, BUYIN, &unparsed, &unparsed).unwrap(),
+        plain
     );
 }
 

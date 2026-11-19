@@ -1,12 +1,53 @@
-//! An aggregate written by hand over the generated domain layer, as an
-//! application writes one: its state the anchor's domain type, snapshotted
-//! as the anchor's wire type through the conversions the layer generates.
+//! Aggregates written by hand over the generated domain layers, as an
+//! application writes them, one per package: each one's state the
+//! anchor's domain type, snapshotted as the anchor's wire type through the
+//! conversions the layer generates.
 
 use angzarr_embedded::WireError;
 use angzarr_embedded_macros::{aggregate, applies, handles_cmd};
 
+use crate::domain::catalog::{CatalogState, ItemListed, ListItem};
 use crate::domain::order::*;
+use crate::wire::shapes::catalog::v1 as catalog_wire;
 use crate::wire::shapes::order::v1 as wire;
+
+/// The catalog domain, its state `shapes.catalog.v1.CatalogState`.
+#[derive(Clone, Debug, Default)]
+pub struct Catalog {
+    pub state: CatalogState,
+}
+
+#[aggregate(domain = "catalog", snapshot = catalog_wire::CatalogState)]
+impl Catalog {
+    #[handles_cmd(ListItem)]
+    fn list(&self, cmd: ListItem, _ctx: &Context) -> Result<ItemListed, Failed<Unrefusable>> {
+        Ok(ItemListed {
+            item: cmd.item,
+            listing: cmd.listing,
+        })
+    }
+
+    #[applies(ItemListed)]
+    fn listed(&mut self, event: ItemListed) {
+        *self.state.stock.entry(event.item.sku.clone()).or_default() += 1;
+        self.state.items.push(event.item);
+    }
+}
+
+impl From<&Catalog> for catalog_wire::CatalogState {
+    fn from(catalog: &Catalog) -> Self {
+        catalog.state.clone().into()
+    }
+}
+
+impl Catalog {
+    /// Resumes from a snapshot: what the domain type cannot hold is
+    /// refused, as an event's would be.
+    pub fn restore(&mut self, snapshot: catalog_wire::CatalogState) -> Result<(), WireError> {
+        self.state = CatalogState::try_from(snapshot)?;
+        Ok(())
+    }
+}
 
 /// The orders domain, its state `shapes.order.v1.OrderState`.
 #[derive(Clone, Debug, Default)]
@@ -99,7 +140,7 @@ mod tests {
         assert_eq!(snapshot.skus, ["a", "b", "a"]);
         assert_eq!(snapshot.counts.get("a"), Some(&2));
         assert_eq!(
-            snapshot.customer.as_ref().map(|c| c.value.clone()),
+            snapshot.customer.as_ref().map(|c| c.value.to_vec()),
             Some(vec![7; 16])
         );
     }
@@ -115,10 +156,26 @@ mod tests {
         assert_eq!(onto.state, orders.state);
     }
 
+    /// An item's price is required: a snapshot of an item without one is
+    /// refused, naming the field, and the state restored onto is kept.
     #[test]
     fn a_snapshot_the_domain_type_cannot_hold_is_refused() {
-        let mut snapshot = placed().to_snapshot();
-        snapshot.customer = Some(Uuid { value: vec![1, 2] });
-        assert!(Orders::from_snapshot(snapshot).is_err());
+        let mut catalog = Catalog::default();
+        catalog.listed(ItemListed {
+            item: item("a"),
+            listing: crate::domain::catalog::ListingId(Uuid::from_bytes([1; 16])),
+        });
+        let mut snapshot = catalog.to_snapshot();
+        assert_eq!(snapshot.stock.get("a"), Some(&1));
+        assert_eq!(
+            Catalog::from_snapshot(snapshot.clone()).expect("it restores").state,
+            catalog.state
+        );
+        snapshot.items[0].price = None;
+        let refused = Catalog::from_snapshot(snapshot.clone()).expect_err("no price");
+        assert!(format!("{refused:?}").contains("price"), "{refused:?}");
+        let before = catalog.state.clone();
+        assert!(State::restore(&mut catalog, snapshot).is_err());
+        assert_eq!(catalog.state, before);
     }
 }
