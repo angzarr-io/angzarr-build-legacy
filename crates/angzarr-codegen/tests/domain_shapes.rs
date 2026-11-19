@@ -8,8 +8,8 @@
 mod common;
 
 use angzarr_codegen::{
-    CodegenError, Generated, ProtoError, UseError, adapters, markup_domain, markup_domain_with,
-    scaffold,
+    CodegenError, Generated, ProtoError, UseError, adapters, adapters_with, markup_domain,
+    markup_domain_with, scaffold, scaffold_with,
 };
 use common::*;
 
@@ -28,6 +28,19 @@ const DOMAIN: &[(&str, &str)] = &[
     ("shapes.catalog.v1", "crate::domain::catalog"),
     ("shapes.order.v1", "crate::domain::order"),
 ];
+
+const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden");
+
+/// `actual` is the golden file at `path` (rewritten under `ANGZARR_BLESS`).
+fn golden(path: &str, actual: &str) {
+    let path = format!("{GOLDEN}/{path}");
+    if std::env::var_os("ANGZARR_BLESS").is_some() {
+        std::fs::write(&path, actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("no {path}"));
+    assert_eq!(actual, expected, "{path}");
+}
 
 fn layers() -> Vec<Generated> {
     markup_domain_with(&descriptors(SHAPES), SHAPES, WIRE, DOMAIN).unwrap()
@@ -473,3 +486,81 @@ fn test_an_anchor_without_state_keeps_its_interface_name() {
 }
 
 // endregion state anchors
+
+// region components of several packages
+
+/// Components in two packages, each package's layer at its own path: each
+/// package's adapters are a module of their own reading that package's
+/// layer, re-exported as `adapters::<Component>` (what `register()`
+/// names). Whether it compiles is angzarr-build's `tests/local`
+/// anchors-app.
+#[test]
+fn test_each_packages_adapters_read_that_packages_layer() {
+    let source = adapters_with(&descriptors(SHAPES), SHAPES, &[], DOMAIN).unwrap();
+    golden("shapes.adapters.rs", &source);
+}
+
+/// One domain path for every package (or none given) is the one module
+/// `adapters` reading `crate::domain`, as `adapters` writes it.
+#[test]
+fn test_adapters_of_one_layer_are_one_module() {
+    let set = descriptors(SHAPES);
+    let one = [
+        ("shapes.common.v1", "crate::domain"),
+        ("shapes.catalog.v1", "crate::domain"),
+        ("shapes.order.v1", "crate::domain"),
+    ];
+    let plain = adapters(&set, SHAPES, &[]).unwrap();
+    assert_eq!(adapters_with(&set, SHAPES, &[], &one).unwrap(), plain);
+    assert_eq!(adapters_with(&set, SHAPES, &[], &[]).unwrap(), plain);
+}
+
+/// Each component's scaffold imports its own package's layer.
+#[test]
+fn test_each_components_scaffold_imports_its_packages_layer() {
+    let files = scaffold_with(&descriptors(SHAPES), SHAPES, WIRE, DOMAIN).unwrap();
+    for f in files.iter().filter(|f| f.path.ends_with("_impl.rs")) {
+        golden(&format!("rust/shapes/{}", f.path), &f.source);
+    }
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        [
+            "catalog_state.rs",
+            "catalog_state_impl.rs",
+            "order_state.rs",
+            "order_state_impl.rs"
+        ]
+    );
+}
+
+/// An anchor without `state` is scaffolded holding its wire type, at its
+/// package's wire path; with no paths given, `crate::wire` and
+/// `crate::domain`, as `scaffold` writes it.
+#[test]
+fn test_a_scaffolds_wire_state_is_at_its_packages_wire_path() {
+    let set = descriptors(BUYIN);
+    let files = scaffold_with(&set, BUYIN, BUYIN_WIRE, &[("buyin.v1", "crate::buyin")]).unwrap();
+    let wallet = files
+        .iter()
+        .find(|f| f.path == "wallet_state_impl.rs")
+        .expect("the wallet's implementation");
+    assert!(
+        wallet.source.contains("use crate::buyin::*;\n"),
+        "{}",
+        wallet.source
+    );
+    assert!(
+        wallet
+            .source
+            .contains("pub state: ::buyin_proto::v1::WalletState,"),
+        "{}",
+        wallet.source
+    );
+    assert_eq!(
+        scaffold_with(&set, BUYIN, &[], &[]).unwrap(),
+        scaffold(&set, BUYIN).unwrap()
+    );
+}
+
+// endregion components of several packages

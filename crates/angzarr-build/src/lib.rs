@@ -171,8 +171,32 @@ pub fn adapters_into(
     includes: &[&str],
     remote: &[&str],
 ) -> Result<(), BuildError> {
+    adapters_with_into(out, protos, includes, remote, &[])
+}
+
+/// [`adapters`], each component's adapter reading its package's domain
+/// layer at the Rust path `domain` names for it, as [`markup_domain_with`]
+/// places them (see `angzarr_codegen::adapters_with`).
+pub fn adapters_with(
+    protos: &[&str],
+    includes: &[&str],
+    remote: &[&str],
+    domain: &[(&str, &str)],
+) -> Result<(), BuildError> {
+    adapters_with_into(&out_dir()?, protos, includes, remote, domain)
+}
+
+/// [`adapters_with`], into `out`.
+pub fn adapters_with_into(
+    out: &Path,
+    protos: &[&str],
+    includes: &[&str],
+    remote: &[&str],
+    domain: &[(&str, &str)],
+) -> Result<(), BuildError> {
     let bytes = build_descriptors(out, protos, includes)?;
-    let source = angzarr_codegen::adapters(&bytes, protos, remote).map_err(BuildError::Codegen)?;
+    let source = angzarr_codegen::adapters_with(&bytes, protos, remote, domain)
+        .map_err(BuildError::Codegen)?;
     let path = out.join("angzarr-adapters.rs");
     std::fs::write(&path, source).map_err(|e| io(&path, &e))
 }
@@ -425,8 +449,24 @@ pub fn scaffold_into(
     includes: &[&str],
     existing: Existing,
 ) -> Result<Vec<Scaffolded>, BuildError> {
+    scaffold_with_into(src, protos, includes, existing, &[], &[])
+}
+
+/// [`scaffold_into`], each component's implementation importing its
+/// package's domain layer at the path `domain` names for it, and holding a
+/// wire state at the path `wire` names, as [`markup_domain_with`] places
+/// them (see `angzarr_codegen::scaffold_with`).
+pub fn scaffold_with_into(
+    src: &Path,
+    protos: &[&str],
+    includes: &[&str],
+    existing: Existing,
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
+) -> Result<Vec<Scaffolded>, BuildError> {
     let bytes = scaffold_descriptors(protos, includes)?;
-    let files = angzarr_codegen::scaffold(&bytes, protos).map_err(BuildError::Codegen)?;
+    let files = angzarr_codegen::scaffold_with(&bytes, protos, wire, domain)
+        .map_err(BuildError::Codegen)?;
     write_scaffold(src, files, existing)
 }
 

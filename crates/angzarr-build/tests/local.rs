@@ -17,6 +17,11 @@
 //! - `json-app`: the json fixture's wire types and their generated proto3
 //!   JSON, held to golden files, round-tripped (property tests) and
 //!   cross-checked with prost-reflect's canonical mapping.
+//! - `anchors-app`: the shapes fixtures' state anchors, in a crate whose
+//!   components are in two packages, each package's layer at its own
+//!   path: the generated adapters, register() and the scaffold of the day
+//!   type-checked; an aggregate written by hand snapshots as its anchor's
+//!   wire type and resumes from it.
 //! - `blackjack-app`: the blackjack example's protos (the spec's): the
 //!   generated layer and the scaffold of the day, `todo!()` bodies and all,
 //!   type-checked. `bare-app` is the same for a domain with no events. Nothing
@@ -27,12 +32,12 @@
 //! network on a cold cache, so they are `#[ignore]`d from a plain `cargo
 //! test` (and from the mutation runs, which would repeat them for every
 //! mutant): `just test` runs them after the rest, `just test-slow` alone.
-//! The three apps share one target directory.
+//! The apps share one target directory.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use angzarr_build::{Existing, Scaffolded, scaffold_into};
+use angzarr_build::{Existing, Scaffolded, scaffold_into, scaffold_with_into};
 
 use angzarr_test_dir::TestDir;
 
@@ -291,6 +296,23 @@ fn assert_scaffold_type_checks(
     components: &[&str],
     includes: &[&str],
 ) {
+    write_scaffold(app, protos, components, includes, &[], &[]);
+    assert_type_checks(app);
+}
+
+/// Each package's Rust path, by its proto package.
+type Paths<'a> = &'a [(&'a str, &'a str)];
+
+/// The scaffold of today's protos, written fresh into `app`'s `src` with
+/// the packages' wire and domain paths: the modules the app declares.
+fn write_scaffold(
+    app: &Path,
+    protos: &[&str],
+    components: &[&str],
+    includes: &[&str],
+    wire: Paths,
+    domain: Paths,
+) {
     let src = app.join("src");
     for entry in std::fs::read_dir(&src).unwrap() {
         let path = entry.unwrap().path();
@@ -298,7 +320,8 @@ fn assert_scaffold_type_checks(
             std::fs::remove_file(path).unwrap();
         }
     }
-    let written = scaffold_into(&src, protos, includes, Existing::Complete).unwrap();
+    let written =
+        scaffold_with_into(&src, protos, includes, Existing::Complete, wire, domain).unwrap();
     let mut files: Vec<String> = written
         .iter()
         .filter_map(|d| match d {
@@ -311,6 +334,10 @@ fn assert_scaffold_type_checks(
         files, components,
         "the scaffold writes the modules the app declares: {written:?}"
     );
+}
+
+/// `app`'s library type-checks.
+fn assert_type_checks(app: &Path) {
     let out = cargo(app, &["check", "--quiet", "--lib"]);
     assert!(
         out.status.success(),
@@ -344,5 +371,52 @@ fn test_a_domain_with_no_events_generated_layer_and_scaffold_type_check() {
         &["bare/v1/bare.proto"],
         &["bare_state_impl.rs"],
         &[&fixtures(), &spec()],
+    );
+}
+
+/// The shapes fixtures' protos: one package of types alone, and two whose
+/// components are anchored on their state.
+const SHAPES: &[&str] = &[
+    "shapes/common/v1/common.proto",
+    "shapes/catalog/v1/catalog.proto",
+    "shapes/order/v1/order.proto",
+];
+/// Each shapes package's wire types and domain layer, at their paths in
+/// `anchors-app` (its `build.rs` names the same).
+const SHAPES_WIRE: &[(&str, &str)] = &[
+    ("shapes.common.v1", "crate::wire::shapes::common::v1"),
+    ("shapes.catalog.v1", "crate::wire::shapes::catalog::v1"),
+    ("shapes.order.v1", "crate::wire::shapes::order::v1"),
+];
+const SHAPES_DOMAIN: &[(&str, &str)] = &[
+    ("shapes.common.v1", "crate::domain::common"),
+    ("shapes.catalog.v1", "crate::domain::catalog"),
+    ("shapes.order.v1", "crate::domain::order"),
+];
+
+/// `tests/local/anchors-app`: state anchors, in a crate whose components
+/// are in two packages, each package's domain layer at its own path. The
+/// generated adapters and register() over the scaffold of the day
+/// type-check; then an aggregate written by hand over the layer snapshots
+/// as its anchor's wire type and resumes from it (the app's tests).
+#[test]
+#[ignore = "builds angzarr-embedded and its dependencies: slow; `just test-slow`"]
+fn test_state_anchors_of_two_packages_type_check_and_snapshot() {
+    let app = app("anchors-app");
+    write_scaffold(
+        &app,
+        SHAPES,
+        &["catalog_state_impl.rs", "order_state_impl.rs"],
+        &[&fixtures()],
+        SHAPES_WIRE,
+        SHAPES_DOMAIN,
+    );
+    assert_type_checks(&app);
+    let out = cargo(&app, &["test", "--quiet"]);
+    assert!(
+        out.status.success(),
+        "the anchors app's tests pass:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
     );
 }

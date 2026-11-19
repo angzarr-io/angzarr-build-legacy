@@ -132,6 +132,19 @@ pub struct PinDrift {
 /// A policy is scaffolded when an aggregate or a process manager of the
 /// descriptor set owns each of its `input_domain` and `output_domain`.
 pub fn scaffold(descriptor_set: &[u8], files: &[&str]) -> Result<Vec<ScaffoldFile>, CodegenError> {
+    scaffold_with(descriptor_set, files, &[], &[])
+}
+
+/// [`scaffold`], each component's implementation importing its package's
+/// domain layer at the Rust path `domain` names for it, and holding a wire
+/// state at the path `wire` names (`crate::domain` and `crate::wire` for a
+/// package neither names), as [`markup_domain_with`] places them.
+pub fn scaffold_with(
+    descriptor_set: &[u8],
+    files: &[&str],
+    _wire: &[(&str, &str)],
+    _domain: &[(&str, &str)],
+) -> Result<Vec<ScaffoldFile>, CodegenError> {
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     let pool = model::pool_components(descriptor_set)?;
     let mut out = Vec::new();
@@ -849,6 +862,20 @@ pub fn adapters(
     descriptor_set: &[u8],
     files: &[&str],
     remote: &[&str],
+) -> Result<String, CodegenError> {
+    adapters_with(descriptor_set, files, remote, &[])
+}
+
+/// [`adapters`], each component's adapter reading its package's domain
+/// layer at the Rust path `domain` names for it (`crate::domain` for a
+/// package it does not name), as [`markup_domain_with`] places them. Over
+/// layers at more than one path, each package's adapters are a module of
+/// their own, re-exported, so every adapter is still `adapters::<Component>`.
+pub fn adapters_with(
+    descriptor_set: &[u8],
+    files: &[&str],
+    remote: &[&str],
+    _domain: &[(&str, &str)],
 ) -> Result<String, CodegenError> {
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     let root = root();
