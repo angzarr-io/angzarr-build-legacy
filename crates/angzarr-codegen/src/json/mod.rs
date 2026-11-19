@@ -479,8 +479,10 @@ fn oneof_part(
             });
             continue;
         }
+        // A type the runtime writes declares no tag of its own: its arm's
+        // tag is the arm's key, as a scalar's is.
         let tag = match &kind {
-            Kind::Message(m) if is_object(&kind) => {
+            Kind::Message(m) => {
                 let own_tag = options::json_message(m).tag;
                 if own_tag.is_empty() { written } else { own_tag }
             }

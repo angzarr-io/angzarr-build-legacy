@@ -261,14 +261,18 @@ for PlaceOrderGiftWrap {
         })
     }
 }
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OrderRefused {
     pub kind: String,
+    pub shipment: Shipment,
 }
 impl From<OrderRefused> for crate::wire::shapes::order::v1::OrderRefused {
     fn from(value: OrderRefused) -> Self {
         crate::wire::shapes::order::v1::OrderRefused {
             kind: value.kind,
+            shipment: Some(
+                crate::wire::shapes::order::v1::Shipment::from(value.shipment),
+            ),
         }
     }
 }
@@ -277,7 +281,83 @@ impl TryFrom<crate::wire::shapes::order::v1::OrderRefused> for OrderRefused {
     fn try_from(
         value: crate::wire::shapes::order::v1::OrderRefused,
     ) -> Result<Self, Self::Error> {
-        Ok(OrderRefused { kind: value.kind })
+        Ok(OrderRefused {
+            kind: value.kind,
+            shipment: Shipment::try_from(
+                value
+                    .shipment
+                    .ok_or(::angzarr_embedded::WireError::Missing {
+                        message: "shapes.order.v1.OrderRefused",
+                        field: "shipment",
+                    })?,
+            )?,
+        })
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct Shipment {
+    pub gift: PlaceOrderGift,
+    pub label: Label,
+}
+impl From<Shipment> for crate::wire::shapes::order::v1::Shipment {
+    fn from(value: Shipment) -> Self {
+        crate::wire::shapes::order::v1::Shipment {
+            gift: Some(
+                crate::wire::shapes::order::v1::place_order::Gift::from(value.gift),
+            ),
+            label: Some(crate::wire::shapes::order::v1::Label::from(value.label)),
+        }
+    }
+}
+impl TryFrom<crate::wire::shapes::order::v1::Shipment> for Shipment {
+    type Error = ::angzarr_embedded::WireError;
+    fn try_from(
+        value: crate::wire::shapes::order::v1::Shipment,
+    ) -> Result<Self, Self::Error> {
+        Ok(Shipment {
+            gift: PlaceOrderGift::try_from(
+                value
+                    .gift
+                    .ok_or(::angzarr_embedded::WireError::Missing {
+                        message: "shapes.order.v1.Shipment",
+                        field: "gift",
+                    })?,
+            )?,
+            label: Label::try_from(
+                value
+                    .label
+                    .ok_or(::angzarr_embedded::WireError::Missing {
+                        message: "shapes.order.v1.Shipment",
+                        field: "label",
+                    })?,
+            )?,
+        })
+    }
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct Label {
+    pub speed: PlaceOrderSpeed,
+}
+impl From<Label> for crate::wire::shapes::order::v1::Label {
+    fn from(value: Label) -> Self {
+        crate::wire::shapes::order::v1::Label {
+            speed: i32::from(value.speed),
+        }
+    }
+}
+impl TryFrom<crate::wire::shapes::order::v1::Label> for Label {
+    type Error = ::angzarr_embedded::WireError;
+    fn try_from(
+        value: crate::wire::shapes::order::v1::Label,
+    ) -> Result<Self, Self::Error> {
+        Ok(Label {
+            speed: PlaceOrderSpeed::try_from(value.speed)
+                .map_err(|value| ::angzarr_embedded::WireError::UnknownEnum {
+                    message: "shapes.order.v1.Label",
+                    field: "speed",
+                    value,
+                })?,
+        })
     }
 }
 #[derive(Clone, Debug, Default, PartialEq)]

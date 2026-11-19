@@ -222,9 +222,58 @@ fn test_another_packages_type_without_a_domain_path_is_refused() {
     );
 }
 
+/// Another package's message held as a map's values, or its enum, is
+/// another package's type too: without a domain path, refused.
+#[test]
+fn test_another_packages_map_value_or_enum_without_a_domain_path_is_refused() {
+    let wire = [
+        ("foreign.other.v1", "crate::wire::other"),
+        ("foreign.map.v1", "crate::wire::map"),
+        ("foreign.enum.v1", "crate::wire::en"),
+    ];
+    for (file, holder) in [
+        ("foreign/map/v1/map.proto", "foreign.map.v1.Holder"),
+        ("foreign/enum/v1/enum.proto", "foreign.enum.v1.Holder"),
+    ] {
+        let package = holder.trim_end_matches(".Holder");
+        assert_eq!(
+            markup_domain_with(
+                &descriptors(&[file]),
+                &[file],
+                &wire,
+                &[(package, "crate::d")]
+            ),
+            Err(CodegenError::Use(UseError::NoDomainPath {
+                package: "foreign.other.v1".to_string(),
+                message: holder.to_string(),
+            })),
+            "{file}"
+        );
+    }
+}
+
 // endregion another package's types
 
 // region UUID
+
+/// An id newtype's name is a name of its layer: one a message has taken is
+/// refused.
+#[test]
+fn test_an_id_type_taking_a_messages_name_is_refused() {
+    const FILE: &str = "bad/v1/id_name.proto";
+    assert_eq!(
+        markup_domain(
+            &descriptors(&[FILE]),
+            &[FILE],
+            &[("bad.v1", "::bad_proto::v1")]
+        ),
+        Err(CodegenError::Proto(ProtoError::NameTaken {
+            name: "Ticket".to_string(),
+            first: "bad.v1.Ticket".to_string(),
+            second: "bad.v1.Ticket.id".to_string(),
+        }))
+    );
+}
 
 /// angzarr's `UUID` is angzarr-proto's own type on both sides: required
 /// when singular, a `Vec` when repeated; no domain type is generated for
@@ -393,6 +442,20 @@ fn test_a_choice_taking_a_types_name_is_refused() {
     );
 }
 
+/// A refusal's args are its fields, never a oneof's arms: the choice is
+/// not one value.
+#[test]
+fn test_a_refusals_oneof_arms_are_not_its_args() {
+    let catalog = flat(&source("shapes.catalog.v1"));
+    assert!(catalog.contains(r#"args.push(("kind","#), "{catalog}");
+    for arm in ["sku", "count"] {
+        assert!(
+            !catalog.contains(&format!(r#"args.push(("{arm}","#)),
+            "{arm}: {catalog}"
+        );
+    }
+}
+
 // endregion oneofs and nested types
 
 /// `Default` is derived for every domain type all of whose fields have
@@ -407,7 +470,13 @@ fn test_default_is_derived_where_every_field_has_one() {
             derives(&order, defaulted)
         );
     }
-    for plain in ["PlaceOrder", "PlaceOrderPayment", "PlaceOrderSpeed"] {
+    for plain in [
+        "PlaceOrder",
+        "PlaceOrderPayment",
+        "PlaceOrderSpeed",
+        "Label",
+        "Shipment",
+    ] {
         assert!(
             !derives(&order, plain).contains("Default"),
             "{plain}: {}",

@@ -157,6 +157,31 @@ fn test_a_well_known_type_the_runtime_does_not_write_is_refused() {
 }
 
 #[test]
+fn test_a_well_known_type_as_a_maps_values_is_refused() {
+    const FILE: &str = "bad/v1/json_map_struct.proto";
+    assert_eq!(
+        json(&descriptors(&[FILE]), &[FILE], &[("bad.v1", "crate::wire")]),
+        Err(CodegenError::Proto(ProtoError::WellKnownType {
+            message: "bad.v1.Shelf".to_string(),
+            field: "values".to_string(),
+            type_name: "google.protobuf.Struct".to_string(),
+        }))
+    );
+}
+
+#[test]
+fn test_flattening_a_map_is_refused() {
+    const FILE: &str = "bad/v1/json_flatten_map.proto";
+    assert_eq!(
+        json(&descriptors(&[FILE]), &[FILE], &[("bad.v1", "crate::wire")]),
+        Err(CodegenError::Proto(ProtoError::JsonFlatten {
+            message: "bad.v1.Flat".to_string(),
+            field: "inner".to_string(),
+        }))
+    );
+}
+
+#[test]
 fn test_flattening_a_scalar_is_refused() {
     const FILE: &str = "bad/v1/json_flatten.proto";
     assert_eq!(

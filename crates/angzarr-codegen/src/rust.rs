@@ -1059,7 +1059,9 @@ fn defaultable(message: &MessageDescriptor, visiting: &mut Vec<String>) -> bool 
         }
         match f.kind() {
             Kind::Enum(_) => false,
-            Kind::Message(m) if crate::model::mapped_as_is(&m) => true,
+            // Timestamp, Duration and UUID, held as they are, are scalars
+            // all through: defaultable, as every other message of such
+            // fields is.
             Kind::Message(m) => defaultable(&m, visiting),
             _ => true,
         }

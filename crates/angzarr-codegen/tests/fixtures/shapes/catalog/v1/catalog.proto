@@ -47,4 +47,9 @@ message ItemRefused {
   option (io.angzarr.v1.refusal_status) = REFUSAL_STATUS_ALREADY_EXISTS;
 
   string kind = 1;
+  // A oneof's arms are not the refusal's args: only `kind` is.
+  oneof clash {
+    string sku = 2;
+    uint32 count = 3;
+  }
 }

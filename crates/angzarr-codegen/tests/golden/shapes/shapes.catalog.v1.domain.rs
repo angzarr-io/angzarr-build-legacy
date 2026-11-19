@@ -127,14 +127,25 @@ impl TryFrom<crate::wire::shapes::catalog::v1::ListItem> for ListItem {
         })
     }
 }
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ItemRefused {
     pub kind: String,
+    pub clash: ItemRefusedClash,
 }
 impl From<ItemRefused> for crate::wire::shapes::catalog::v1::ItemRefused {
     fn from(value: ItemRefused) -> Self {
         crate::wire::shapes::catalog::v1::ItemRefused {
             kind: value.kind,
+            clash: Some(
+                match value.clash {
+                    ItemRefusedClash::Sku(v) => {
+                        crate::wire::shapes::catalog::v1::item_refused::Clash::Sku(v)
+                    }
+                    ItemRefusedClash::Count(v) => {
+                        crate::wire::shapes::catalog::v1::item_refused::Clash::Count(v)
+                    }
+                },
+            ),
         }
     }
 }
@@ -143,8 +154,30 @@ impl TryFrom<crate::wire::shapes::catalog::v1::ItemRefused> for ItemRefused {
     fn try_from(
         value: crate::wire::shapes::catalog::v1::ItemRefused,
     ) -> Result<Self, Self::Error> {
-        Ok(ItemRefused { kind: value.kind })
+        Ok(ItemRefused {
+            kind: value.kind,
+            clash: match value
+                .clash
+                .ok_or(::angzarr_embedded::WireError::Missing {
+                    message: "shapes.catalog.v1.ItemRefused",
+                    field: "clash",
+                })?
+            {
+                crate::wire::shapes::catalog::v1::item_refused::Clash::Sku(v) => {
+                    ItemRefusedClash::Sku(v)
+                }
+                crate::wire::shapes::catalog::v1::item_refused::Clash::Count(v) => {
+                    ItemRefusedClash::Count(v)
+                }
+            },
+        })
     }
+}
+/// The choice of `shapes.catalog.v1.ItemRefused.clash`: one of its arms.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ItemRefusedClash {
+    Sku(String),
+    Count(u32),
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ItemListed {

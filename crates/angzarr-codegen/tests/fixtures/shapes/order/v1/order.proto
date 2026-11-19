@@ -73,8 +73,19 @@ message OrderPlaced {
   optional google.protobuf.Timestamp at = 4;
 }
 
+// A type holding one with no Default (a required enum) has none either.
+message Shipment {
+  PlaceOrder.Gift gift = 1;
+  Label label = 2;
+}
+
+message Label {
+  PlaceOrder.Speed speed = 1;
+}
+
 message OrderRefused {
   option (io.angzarr.v1.refusal_status) = REFUSAL_STATUS_FAILED_PRECONDITION;
 
   string kind = 1;
+  Shipment shipment = 2;
 }
