@@ -16,6 +16,33 @@ fn generated() -> String {
     json(&descriptors(&[JSON]), &[JSON], WIRE).unwrap()
 }
 
+const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden");
+
+/// `actual` is the golden file at `path` (rewritten under `ANGZARR_BLESS`).
+fn golden(path: &str, actual: &str) {
+    let path = format!("{GOLDEN}/{path}");
+    if std::env::var_os("ANGZARR_BLESS").is_some() {
+        std::fs::write(&path, actual).unwrap();
+        return;
+    }
+    let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("no {path}"));
+    assert_eq!(actual, expected, "{path}");
+}
+
+/// The json fixture's generated JSON is the runtime, verbatim, and the
+/// golden file around it: the text angzarr-build's `tests/local` json-app
+/// compiles, holds to its golden JSON, round-trips and cross-checks with
+/// prost-reflect.
+#[test]
+fn test_the_generated_json_is_the_runtime_and_the_golden_file() {
+    let runtime = include_str!("../src/json/runtime.rs");
+    let generated = generated();
+    let (head, rest) = generated
+        .split_once(runtime)
+        .expect("the runtime, verbatim");
+    golden("json.json.rs", &format!("{head}// (the runtime)\n{rest}"));
+}
+
 fn file() -> syn::File {
     syn::parse_file(&generated()).expect("the generated JSON parses")
 }

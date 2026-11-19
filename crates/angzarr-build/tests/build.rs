@@ -5,7 +5,8 @@
 use std::path::Path;
 
 use angzarr_build::{
-    BuildError, json_into, markup_domain_into, markup_domain_with_into, wire_into,
+    BuildError, Existing, Scaffolded, adapters_into, adapters_with_into, json_into,
+    markup_domain_into, markup_domain_with_into, scaffold_with_into, wire_into,
 };
 
 use angzarr_test_dir::TestDir;
@@ -65,6 +66,48 @@ fn test_markup_domain_with_into_writes_a_layer_per_package_each_at_its_path() {
     }
     let order = std::fs::read_to_string(out.join("shapes.order.v1.domain.rs")).unwrap();
     assert!(order.contains("Vec<crate::catalog::Item>"), "{order}");
+}
+
+/// The adapters, each package's reading its own layer at its path, and
+/// with none given the one `crate::domain`.
+#[test]
+fn test_adapters_with_into_reads_each_packages_layer_at_its_path() {
+    let out = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-adapters-with"));
+    let domain = [
+        ("shapes.catalog.v1", "crate::catalog"),
+        ("shapes.order.v1", "crate::order"),
+    ];
+    let read = || std::fs::read_to_string(out.join("angzarr-adapters.rs")).unwrap();
+    adapters_with_into(&out, SHAPES, &[&fixtures()], &[], &domain).unwrap();
+    let source = read();
+    assert!(source.contains("use crate::order::*;"), "{source}");
+    assert!(
+        source.contains("crate::catalog::CatalogStateInterface::list_item"),
+        "{source}"
+    );
+    adapters_into(&out, SHAPES, &[&fixtures()], &[]).unwrap();
+    let source = read();
+    assert!(source.contains("use crate::domain::*;"), "{source}");
+    assert!(!source.contains("crate::order::"), "{source}");
+}
+
+/// The scaffold, each component's implementation importing its package's
+/// layer at its path.
+#[test]
+fn test_scaffold_with_into_imports_each_packages_layer_at_its_path() {
+    let src = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-scaffold-with"));
+    let domain = [
+        ("shapes.catalog.v1", "crate::catalog"),
+        ("shapes.order.v1", "crate::order"),
+    ];
+    let done =
+        scaffold_with_into(&src, SHAPES, &[&fixtures()], Existing::Keep, &[], &domain).unwrap();
+    assert!(
+        done.contains(&Scaffolded::Created(src.join("order_state_impl.rs"))),
+        "{done:?}"
+    );
+    let order = std::fs::read_to_string(src.join("order_state_impl.rs")).unwrap();
+    assert!(order.contains("use crate::order::*;\n"), "{order}");
 }
 
 /// The JSON of the wire types is written only when asked for, as

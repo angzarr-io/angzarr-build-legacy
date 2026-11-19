@@ -487,6 +487,23 @@ fn test_an_anchor_without_state_keeps_its_interface_name() {
 
 // endregion state anchors
 
+// region golden
+
+/// Each shapes package's layer is its golden file: the text angzarr-build's
+/// `tests/local` shapes-app compiles and round-trips through prost's bytes,
+/// and anchors-app builds its adapters and aggregates on.
+#[test]
+fn test_each_packages_layer_is_its_golden_file() {
+    for generated in layers() {
+        golden(
+            &format!("shapes/{}.domain.rs", generated.package),
+            &generated.source,
+        );
+    }
+}
+
+// endregion golden
+
 // region components of several packages
 
 /// Components in two packages, each package's layer at its own path: each
