@@ -9,7 +9,7 @@ mod common;
 
 use std::collections::BTreeSet;
 
-use angzarr_codegen::{adapters, descriptors_rs, markup_domain, register};
+use angzarr_codegen::{adapters, descriptors_rs, markup_domain_with, register};
 use common::*;
 use proc_macro2::{TokenStream, TokenTree};
 
@@ -28,6 +28,8 @@ const ALLOWED: &[&str] = &[
     "angzarr_embedded::WireError::Missing",
     "angzarr_embedded::WireError::UnknownEnum",
     "angzarr_embedded::v1::Uuid",
+    "angzarr_embedded::v1::Uuid::from",
+    "angzarr_embedded::ids::UuidError",
     "angzarr_embedded::markup::BusinessStatus",
     "angzarr_embedded::markup::Bug",
     "angzarr_embedded::markup::Bug::coded",
@@ -137,8 +139,17 @@ fn follow(
 }
 
 fn generated(files: &[&str], wire: &[(&str, &str)], remote: &[&str]) -> Vec<String> {
+    generated_with(files, wire, &[], remote)
+}
+
+fn generated_with(
+    files: &[&str],
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
+    remote: &[&str],
+) -> Vec<String> {
     let set = descriptors(files);
-    let mut sources: Vec<String> = markup_domain(&set, files, wire)
+    let mut sources: Vec<String> = markup_domain_with(&set, files, wire, domain)
         .unwrap()
         .into_iter()
         .map(|g| g.source)
@@ -163,6 +174,24 @@ fn test_generated_code_names_only_the_runtimes_public_api() {
             BLACKJACK,
             &[("io.angzarr.examples.v1", "crate::wire")],
             &["player"],
+        ),
+        generated_with(
+            &[
+                "shapes/common/v1/common.proto",
+                "shapes/catalog/v1/catalog.proto",
+                "shapes/order/v1/order.proto",
+            ],
+            &[
+                ("shapes.common.v1", "crate::wire::common"),
+                ("shapes.catalog.v1", "crate::wire::catalog"),
+                ("shapes.order.v1", "crate::wire::order"),
+            ],
+            &[
+                ("shapes.common.v1", "crate::domain::common"),
+                ("shapes.catalog.v1", "crate::domain::catalog"),
+                ("shapes.order.v1", "crate::domain::order"),
+            ],
+            &[],
         ),
     ]
     .concat()

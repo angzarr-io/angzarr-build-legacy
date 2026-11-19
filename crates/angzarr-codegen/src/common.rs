@@ -96,6 +96,39 @@ pub(crate) fn local_name(full: &str, package: &str) -> String {
         .replace('.', "")
 }
 
+/// A message's domain name: its [`local_name`] (`PlaceOrder.Gift` as
+/// `PlaceOrderGift`).
+pub(crate) fn message_name(m: &MessageDescriptor) -> String {
+    local_name(m.full_name(), m.package_name())
+}
+
+/// The domain name of a oneof's choice: its message's domain name, then
+/// the oneof's name in upper camel case (`PlaceOrder.payment` as
+/// `PlaceOrderPayment`).
+pub(crate) fn choice_name(oneof: &prost_reflect::OneofDescriptor) -> String {
+    format!(
+        "{}{}",
+        message_name(oneof.parent_message()),
+        upper_camel(oneof.name())
+    )
+}
+
+/// `deferred_until` as `DeferredUntil`, as prost names a oneof and its
+/// arms.
+pub(crate) fn upper_camel(snake: &str) -> String {
+    snake
+        .split('_')
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let mut chars = w.chars();
+            chars
+                .next()
+                .map(|c| c.to_ascii_uppercase().to_string() + chars.as_str())
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
 /// An enum's domain name: its [`local_name`].
 pub(crate) fn enum_name(e: &EnumDescriptor) -> String {
     local_name(e.full_name(), e.package_name())

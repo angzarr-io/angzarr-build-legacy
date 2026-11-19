@@ -9,6 +9,11 @@
 //! - `kinds-app`: the kinds fixture (a typed refusal of each field kind, a
 //!   command refusing several, several emits, a projector of two domains),
 //!   built and run, a policy swapped for one written by hand.
+//! - `shapes-app`: the shapes fixtures, three packages each referencing
+//!   another's types (one of types alone), angzarr's UUID and id newtypes,
+//!   Duration, oneofs, nested types and state anchors: wire types and
+//!   domain layers, whose tests (property tests) convert each domain type to
+//!   its wire type, through prost's bytes, and back.
 //! - `blackjack-app`: the blackjack example's protos (the spec's): the
 //!   generated layer and the scaffold of the day, `todo!()` bodies and all,
 //!   type-checked. `bare-app` is the same for a domain with no events. Nothing
@@ -240,6 +245,21 @@ fn test_the_kinds_app_refuses_records_and_projects_as_generated() {
             "",
         ]
         .join("\n")
+    );
+}
+
+/// `tests/local/shapes-app`: every domain type of the shapes fixtures
+/// round-trips through its wire type, and what the domain cannot hold is
+/// refused, naming the field.
+#[test]
+#[ignore = "builds angzarr-embedded and its dependencies: slow; `just test-slow`"]
+fn test_the_shapes_apps_domain_types_round_trip_through_the_wire() {
+    let out = cargo(&app("shapes-app"), &["test", "--quiet"]);
+    assert!(
+        out.status.success(),
+        "the shapes app's tests pass:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
     );
 }
 

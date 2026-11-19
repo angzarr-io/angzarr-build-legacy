@@ -20,8 +20,12 @@ const COMMAND: &str = "io.angzarr.v1.command";
 const FACT: &str = "io.angzarr.v1.fact";
 const EVENT: &str = "io.angzarr.v1.event";
 const REFUSAL_STATUS: &str = "io.angzarr.v1.refusal_status";
-/// The one well-known type the domain layer maps (to angzarr-embedded's `Timestamp`).
+/// The well-known types the domain layer maps, each as its own type on
+/// both sides: angzarr-embedded's `Timestamp`, and prost's `Duration`.
 pub(crate) const TIMESTAMP: &str = "google.protobuf.Timestamp";
+pub(crate) const DURATION: &str = "google.protobuf.Duration";
+/// angzarr's `UUID`, angzarr-proto's own type on both sides.
+pub(crate) const UUID: &str = "io.angzarr.v1.UUID";
 const WELL_KNOWN: &str = "google.protobuf";
 
 /// A component kind a generator emits.
@@ -124,6 +128,12 @@ pub(crate) struct Component {
     pub kind: ComponentKind,
     /// The generated names' stem: the anchor message's name.
     pub name: String,
+    /// Whether the anchor is the component's state (`MessageCodegen.state`):
+    /// a domain type of its layer, its interface then `<name>Interface`.
+    pub state: bool,
+    /// The name of its interface, the domain layer's trait: its `name`, or
+    /// `<name>Interface` for a state anchor.
+    pub interface: String,
     /// Its one required name in an application
     /// (`ComponentOptions.component_name`, decision 14.87).
     pub component_name: String,
@@ -190,10 +200,100 @@ pub(crate) struct Package {
     pub interfaces: Vec<String>,
 }
 
+impl Package {
+    /// Every name the package's layer declares a type under, with what
+    /// takes it: each message and enum (its full name), each oneof's
+    /// choice (the oneof's full name) and each id newtype (the first field
+    /// declaring it), in that order.
+    pub(crate) fn names(&self) -> Vec<(String, String)> {
+        let mut names: Vec<(String, String)> = self
+            .messages
+            .iter()
+            .map(|m| (m.full_name().to_string(), crate::common::message_name(m)))
+            .chain(
+                self.enums
+                    .iter()
+                    .map(|e| (e.full_name().to_string(), crate::common::enum_name(e))),
+            )
+            .collect();
+        for message in &self.messages {
+            for oneof in message.oneofs().filter(|o| !o.is_synthetic()) {
+                names.push((
+                    oneof.full_name().to_string(),
+                    crate::common::choice_name(&oneof),
+                ));
+            }
+        }
+        let mut ids: Vec<String> = Vec::new();
+        for message in &self.messages {
+            for field in message.fields() {
+                if let Some(id) = crate::options::id_type(&field)
+                    && !ids.contains(&id)
+                {
+                    names.push((field.full_name().to_string(), id.clone()));
+                    ids.push(id);
+                }
+            }
+        }
+        names
+    }
+}
+
+impl Package {
+    /// Each type of another package a message of this one holds, as the
+    /// holding message's full name and the other package, in order.
+    pub(crate) fn foreign(&self) -> Vec<(String, String)> {
+        let mut foreign = Vec::new();
+        for message in &self.messages {
+            for field in message.fields() {
+                let kind = match field.kind() {
+                    Kind::Message(entry) if entry.is_map_entry() => {
+                        entry.map_entry_value_field().kind()
+                    }
+                    kind => kind,
+                };
+                let package = match kind {
+                    Kind::Message(m) if mapped_as_is(&m) => continue,
+                    Kind::Message(m) => m.package_name().to_string(),
+                    Kind::Enum(e) => e.package_name().to_string(),
+                    _ => continue,
+                };
+                if package != message.package_name() {
+                    foreign.push((message.full_name().to_string(), package));
+                }
+            }
+        }
+        foreign
+    }
+}
+
+/// A message the domain layer holds as its own type on both sides
+/// (`Timestamp`, `Duration`, angzarr's `UUID`): no domain type of its own.
+pub(crate) fn mapped_as_is(m: &MessageDescriptor) -> bool {
+    [TIMESTAMP, DURATION, UUID].contains(&m.full_name())
+}
+
+/// The first name of `names` (each what takes it and the name) taken
+/// twice, refused, naming both.
+fn refuse_taken(names: &[(String, String)]) -> Result<(), ProtoError> {
+    for (i, (second, name)) in names.iter().enumerate() {
+        if let Some((first, _)) = names[..i].iter().find(|(_, n)| n == name) {
+            return Err(ProtoError::NameTaken {
+                name: name.clone(),
+                first: first.clone(),
+                second: second.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
 /// The markup domain layer's packages by name: every type the inputs,
 /// events and refusals of each aggregate and process manager reach, and the
-/// events each projector projects. The state is the implementation's (its
-/// wire type), and a policy holds no domain type.
+/// events each projector projects, each in its own package's layer (a
+/// package of types alone has one). The state is the implementation's (its
+/// wire type), unless the anchor declares `state`; a policy holds no domain
+/// type.
 pub(crate) fn build_markup(
     descriptor_set: &[u8],
     files: &[&str],
@@ -203,24 +303,24 @@ pub(crate) fn build_markup(
         .filter(|c| c.kind != ComponentKind::Policy)
         .collect();
     let packages = packages(components, |c| {
-        c.inputs
-            .iter()
-            .flat_map(|i| std::iter::once(&i.message).chain(&i.refuses))
-            .chain(&c.events)
-            .cloned()
+        c.state
+            .then(|| c.anchor.clone())
+            .into_iter()
+            .chain(
+                c.inputs
+                    .iter()
+                    .flat_map(|i| std::iter::once(&i.message).chain(&i.refuses))
+                    .chain(&c.events)
+                    .cloned(),
+            )
             .collect()
     })?;
     for package in packages.values() {
-        let names = package
-            .messages
+        let names = package.names();
+        refuse_taken(&names)?;
+        let names = names
             .iter()
-            .map(|m| (m.full_name(), m.name().to_string()))
-            .chain(
-                package
-                    .enums
-                    .iter()
-                    .map(|e| (e.full_name(), crate::common::enum_name(e))),
-            );
+            .map(|(full, local)| (full.as_str(), local.clone()));
         refuse_reserved(names.clone())?;
         // A command refusing several types refuses with a choice the
         // domain layer names after it: no domain type may take that name.
@@ -297,7 +397,7 @@ pub(crate) fn pool_components(descriptor_set: &[u8]) -> Result<Vec<Component>, C
 }
 
 /// `components` grouped by their anchor's package, with every type `roots`
-/// reaches.
+/// reaches in its own package.
 fn packages(
     components: Vec<Component>,
     roots: impl Fn(&Component) -> Vec<MessageDescriptor>,
@@ -308,20 +408,25 @@ fn packages(
         for root in roots(&component) {
             reach.message(&root)?;
         }
-        let package = packages
-            .entry(component.anchor.package_name().to_string())
-            .or_default();
         for message in reach.messages {
+            let package = packages
+                .entry(message.package_name().to_string())
+                .or_default();
             if !package.messages.contains(&message) {
                 package.messages.push(message);
             }
         }
         for e in reach.enums {
+            let package = packages.entry(e.package_name().to_string()).or_default();
             if !package.enums.contains(&e) {
                 package.enums.push(e);
             }
         }
-        package.components.push(component);
+        packages
+            .entry(component.anchor.package_name().to_string())
+            .or_default()
+            .components
+            .push(component);
     }
     Ok(packages)
 }
@@ -565,6 +670,12 @@ impl<'a> Markup<'a> {
                 anchor: message.clone(),
                 kind,
                 name: message.name().to_string(),
+                state: crate::options::is_state(message),
+                interface: if crate::options::is_state(message) {
+                    format!("{}Interface", message.name())
+                } else {
+                    message.name().to_string()
+                },
                 component_name,
                 domain: string_field(&declaration, "domain"),
                 input_domain: String::new(),
@@ -796,7 +907,7 @@ impl Reach {
                 kind => kind,
             };
             match kind {
-                Kind::Message(m) if m.full_name() == TIMESTAMP => {}
+                Kind::Message(m) if mapped_as_is(&m) => {}
                 Kind::Message(m) if m.package_name() == WELL_KNOWN => {
                     return Err(ProtoError::WellKnownType {
                         message: message.full_name().to_string(),

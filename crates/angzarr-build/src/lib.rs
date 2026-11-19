@@ -64,9 +64,35 @@ pub fn markup_domain_into(
     includes: &[&str],
     wire: &[(&str, &str)],
 ) -> Result<(), BuildError> {
+    markup_domain_with_into(out, protos, includes, wire, &[])
+}
+
+/// [`markup_domain`] across packages: `domain` names the Rust path each
+/// package's layer is included at (`<package>.domain.rs`), so a type of
+/// another package is that package's domain type, never a copy. A package
+/// whose types another holds is generated too, a package of types alone
+/// included, and refused without a path here
+/// (`angzarr-codegen-no-domain-path`).
+pub fn markup_domain_with(
+    protos: &[&str],
+    includes: &[&str],
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
+) -> Result<(), BuildError> {
+    markup_domain_with_into(&out_dir()?, protos, includes, wire, domain)
+}
+
+/// [`markup_domain_with`], into `out`.
+pub fn markup_domain_with_into(
+    out: &Path,
+    protos: &[&str],
+    includes: &[&str],
+    wire: &[(&str, &str)],
+    domain: &[(&str, &str)],
+) -> Result<(), BuildError> {
     let bytes = build_descriptors(out, protos, includes)?;
-    let generated =
-        angzarr_codegen::markup_domain(&bytes, protos, wire).map_err(BuildError::Codegen)?;
+    let generated = angzarr_codegen::markup_domain_with(&bytes, protos, wire, domain)
+        .map_err(BuildError::Codegen)?;
     write_domain(out, generated)
 }
 
@@ -746,10 +772,17 @@ fn out_dir() -> Result<PathBuf, BuildError> {
         .ok_or(BuildError::NoOutDir)
 }
 
-/// `includes`, then angzarr's protos, written under `out`.
+/// `includes`, then angzarr's protos and the codegen options
+/// (`angzarr_codegen::CODEGEN_PROTO`), written under `out`.
 fn with_angzarr(out: &Path, includes: &[&str]) -> Result<Vec<PathBuf>, BuildError> {
     let dir = out.join("angzarr-proto");
     let angzarr = angzarr_proto::protos::write_include_dir(&dir).map_err(|e| io(&dir, &e))?;
+    let (name, source) = angzarr_codegen::CODEGEN_PROTO;
+    let codegen = angzarr.join(name);
+    if let Some(parent) = codegen.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| io(parent, &e))?;
+    }
+    std::fs::write(&codegen, source).map_err(|e| io(&codegen, &e))?;
     Ok(includes
         .iter()
         .map(PathBuf::from)

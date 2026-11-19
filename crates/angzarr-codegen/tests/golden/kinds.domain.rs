@@ -102,7 +102,7 @@ impl TryFrom<i32> for MislabeledCause {
         }
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Post {}
 impl From<Post> for crate::wire::Post {
     fn from(_value: Post) -> Self {
@@ -206,7 +206,7 @@ impl TryFrom<crate::wire::PostRefused> for PostRefused {
         })
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Note {
     pub text: String,
 }
@@ -247,7 +247,7 @@ impl TryFrom<crate::wire::Unreasoned> for Unreasoned {
         })
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Listed {
     pub reason: Vec<ListedReason>,
 }
@@ -325,7 +325,7 @@ impl TryFrom<crate::wire::Mislabeled> for Mislabeled {
         })
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Open {}
 impl From<Open> for crate::wire::Open {
     fn from(_value: Open) -> Self {
@@ -338,7 +338,7 @@ impl TryFrom<crate::wire::Open> for Open {
         Ok(Open {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Four {}
 impl From<Four> for crate::wire::Four {
     fn from(_value: Four) -> Self {
@@ -351,7 +351,7 @@ impl TryFrom<crate::wire::Four> for Four {
         Ok(Four {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Maybe {}
 impl From<Maybe> for crate::wire::Maybe {
     fn from(_value: Maybe) -> Self {
@@ -364,7 +364,7 @@ impl TryFrom<crate::wire::Maybe> for Maybe {
         Ok(Maybe {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct MaybeBoth {}
 impl From<MaybeBoth> for crate::wire::MaybeBoth {
     fn from(_value: MaybeBoth) -> Self {
@@ -377,7 +377,7 @@ impl TryFrom<crate::wire::MaybeBoth> for MaybeBoth {
         Ok(MaybeBoth {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Batch {}
 impl From<Batch> for crate::wire::Batch {
     fn from(_value: Batch) -> Self {
@@ -390,7 +390,7 @@ impl TryFrom<crate::wire::Batch> for Batch {
         Ok(Batch {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Raw {}
 impl From<Raw> for crate::wire::Raw {
     fn from(_value: Raw) -> Self {
@@ -403,7 +403,7 @@ impl TryFrom<crate::wire::Raw> for Raw {
         Ok(Raw {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Arrived {}
 impl From<Arrived> for crate::wire::Arrived {
     fn from(_value: Arrived) -> Self {
@@ -416,7 +416,7 @@ impl TryFrom<crate::wire::Arrived> for Arrived {
         Ok(Arrived {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Swept {}
 impl From<Swept> for crate::wire::Swept {
     fn from(_value: Swept) -> Self {
@@ -429,7 +429,7 @@ impl TryFrom<crate::wire::Swept> for Swept {
         Ok(Swept {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Posted {}
 impl From<Posted> for crate::wire::Posted {
     fn from(_value: Posted) -> Self {
@@ -442,7 +442,7 @@ impl TryFrom<crate::wire::Posted> for Posted {
         Ok(Posted {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Noted {}
 impl From<Noted> for crate::wire::Noted {
     fn from(_value: Noted) -> Self {
@@ -455,7 +455,7 @@ impl TryFrom<crate::wire::Noted> for Noted {
         Ok(Noted {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Cleared {}
 impl From<Cleared> for crate::wire::Cleared {
     fn from(_value: Cleared) -> Self {
@@ -468,7 +468,7 @@ impl TryFrom<crate::wire::Cleared> for Cleared {
         Ok(Cleared {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Closed {}
 impl From<Closed> for crate::wire::Closed {
     fn from(_value: Closed) -> Self {
@@ -481,7 +481,7 @@ impl TryFrom<crate::wire::Closed> for Closed {
         Ok(Closed {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Audit {}
 impl From<Audit> for crate::wire::Audit {
     fn from(_value: Audit) -> Self {
@@ -494,7 +494,7 @@ impl TryFrom<crate::wire::Audit> for Audit {
         Ok(Audit {})
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Audited {}
 impl From<Audited> for crate::wire::Audited {
     fn from(_value: Audited) -> Self {

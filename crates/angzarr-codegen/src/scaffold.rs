@@ -366,6 +366,7 @@ fn domain_methods(component: &Component) -> Vec<Method> {
 /// the domain types, every method required.
 fn interface_source(component: &Component, methods: &[Method]) -> String {
     let name = &component.name;
+    let interface = &component.interface;
     let anchor = component.anchor.full_name();
     let what = match component.kind {
         ComponentKind::Projector => {
@@ -387,7 +388,7 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
         }
     };
     let head = format!(
-        "{name}: the interface of `{anchor}`, generated from its protos: its \
+        "{interface}: the interface of `{anchor}`, generated from its protos: its \
          implementation, `{name}Impl`, is yours (`angzarr scaffold rust` writes it \
          once), and the generated adapter (`adapters::{name}`) carries the markup and \
          calls it."
@@ -404,7 +405,7 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
     // A domain's handlers fail with the generated layer's `Failed`, whose
     // size is not the application's to choose.
     out.push_str(&format!(
-        "#[allow(clippy::result_large_err)]\npub trait {name} {{\n"
+        "#[allow(clippy::result_large_err)]\npub trait {interface} {{\n"
     ));
     let body: Vec<String> = methods
         .iter()
@@ -417,8 +418,9 @@ fn interface_source(component: &Component, methods: &[Method]) -> String {
 
 fn impl_source(component: &Component, methods: &[&Method]) -> String {
     let name = &component.name;
+    let interface = &component.interface;
     let mut out = format!(
-        "//! {name}Impl: the implementation of `{name}`, the generated domain layer's\n\
+        "//! {name}Impl: the implementation of `{interface}`, the generated domain layer's\n\
          //! interface, written once by `angzarr scaffold rust` and yours from then on:\n\
          //! `--missing` adds the required methods it lacks, each `todo!()`.\n\n"
     );
@@ -434,6 +436,12 @@ fn impl_source(component: &Component, methods: &[&Method]) -> String {
              pub struct {name}Impl {{\n    pub state: crate::wire::{},\n}}\n\n",
             component.anchor.name()
         ));
+    } else if component.state {
+        out.push_str(&format!(
+            "/// The state the `apply_` methods fold: the anchor's domain type.\n\
+             #[derive(Clone, Debug, Default)]\n\
+             pub struct {name}Impl {{\n    pub state: {name},\n}}\n\n"
+        ));
     } else {
         out.push_str(&format!(
             "/// The state the `apply_` methods fold.\n\
@@ -442,7 +450,7 @@ fn impl_source(component: &Component, methods: &[&Method]) -> String {
             component.anchor.name()
         ));
     }
-    out.push_str(&format!("impl {name} for {name}Impl {{\n"));
+    out.push_str(&format!("impl {interface} for {name}Impl {{\n"));
     let body: Vec<String> = methods
         .iter()
         .map(|m| {
@@ -955,8 +963,9 @@ impl Adapter {
         let stem_impl = format_ident!("{}_impl", snake(&component.name));
         let name = ident(&component.name);
         let name_impl = format_ident!("{}Impl", component.name);
+        let interface = ident(&component.interface);
         Adapter {
-            interface: quote!(crate::domain::#name),
+            interface: quote!(crate::domain::#interface),
             implementation: quote!(crate::#stem_impl::#name_impl),
             name,
         }
@@ -1501,7 +1510,7 @@ pub fn markup_domain_with(
     descriptor_set: &[u8],
     files: &[&str],
     wire: &[(&str, &str)],
-    _domain: &[(&str, &str)],
+    domain: &[(&str, &str)],
 ) -> Result<Vec<Generated>, CodegenError> {
     let mut packages = model::build_markup(descriptor_set, files)?;
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
@@ -1514,7 +1523,7 @@ pub fn markup_domain_with(
         let layer = packages
             .entry(home.anchor.package_name().to_string())
             .or_default();
-        let mut names = vec![component.name.clone()];
+        let mut names = vec![component.interface.clone()];
         names.extend(fact_choice(component));
         names.extend(refusal_choice(component));
         let taken = layer
@@ -1539,5 +1548,5 @@ pub fn markup_domain_with(
         }
         layer.interfaces.push(interface_source(component, &methods));
     }
-    generate(packages, wire, crate::rust::markup_package)
+    generate(packages, wire, domain, crate::rust::markup_package)
 }

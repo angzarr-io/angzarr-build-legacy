@@ -7,17 +7,24 @@
 //! gone), proto3 `optional` stays an `Option`, and enums are closed: the
 //! zero value (`*_UNSPECIFIED`) and any number without a variant are refused.
 //! Enums convert by number, so nothing here depends on how prost names
-//! variants.
+//! variants. A oneof is a required choice of its arms (`<Message><Oneof>`),
+//! a nested type is named after its enclosing messages, `Timestamp`,
+//! `Duration` and angzarr's `UUID` are their own types on both sides (a
+//! UUID declaring `id_type` its newtype), and another package's type is
+//! that package's domain type, at its layer's path. A type derives
+//! `Default` where every field has one.
 
 use angzarr_diagnostic::code;
 use proc_macro2::{Span, TokenStream};
 use prost_reflect::{EnumDescriptor, FieldDescriptor, Kind, MessageDescriptor};
 use quote::{format_ident, quote};
 
+use crate::Paths;
 use crate::common::{
-    enum_name, output_name, refusal_choice_name, refusal_key, refusal_reason, screaming, wire_name,
+    choice_name, enum_name, message_name, output_name, refusal_choice_name, refusal_key,
+    refusal_reason, screaming, snake, upper_camel, wire_name,
 };
-use crate::model::{Package, TIMESTAMP};
+use crate::model::{DURATION, Package, TIMESTAMP, UUID};
 
 /// The runtime crate the generated code targets, as its Rust identifier:
 /// every path into it, the macros crate's name (`<RUNTIME>_macros`) and the
@@ -45,14 +52,71 @@ pub(crate) fn root() -> TokenStream {
 /// wire conversions, a `DomainMessage` impl for every input, event and
 /// refusal of its components, and each component's command and event enums
 /// with their `Payload` impls. No `State` impl: the markup generates it.
-pub(crate) fn markup_package(package: &Package, wire: &syn::Path) -> String {
+/// The package whose layer is being written, and where every package's
+/// code is.
+struct Layer<'a> {
+    package: &'a str,
+    paths: &'a Paths,
+}
+
+impl Layer<'_> {
+    /// The module path of prost's types in `message`'s own module, for a
+    /// type declared in it: its package's wire path, then a module per
+    /// enclosing message (`place_order::gift`), as prost nests them.
+    fn wire_module(&self, message: &MessageDescriptor) -> TokenStream {
+        let wire = &self.paths.wire[message.package_name()];
+        let mut modules: Vec<syn::Ident> = Vec::new();
+        let mut parent = message.parent_message();
+        while let Some(p) = parent {
+            modules.push(ident(&snake(p.name())));
+            parent = p.parent_message();
+        }
+        modules.reverse();
+        quote!(#wire #(::#modules)*)
+    }
+
+    /// `message`'s prost type.
+    fn wire_type(&self, message: &MessageDescriptor) -> TokenStream {
+        let module = self.wire_module(message);
+        let name = ident(message.name());
+        quote!(#module::#name)
+    }
+
+    /// The prost choice of `oneof`: `<message module>::<Oneof>`.
+    fn wire_choice(&self, oneof: &prost_reflect::OneofDescriptor) -> TokenStream {
+        let message = oneof.parent_message();
+        let module = self.wire_module(message);
+        let inner = ident(&snake(message.name()));
+        let name = ident(&upper_camel(oneof.name()));
+        quote!(#module::#inner::#name)
+    }
+
+    /// The domain type named `local` of `package`: bare in its own layer,
+    /// else at that package's domain path.
+    fn domain(&self, package: &str, local: &str) -> TokenStream {
+        let name = ident(local);
+        if package == self.package {
+            quote!(#name)
+        } else {
+            let path = &self.paths.domain[package];
+            quote!(#path::#name)
+        }
+    }
+}
+
+pub(crate) fn markup_package(package: &Package, name: &str, paths: &Paths) -> String {
+    let at = Layer {
+        package: name,
+        paths,
+    };
+    let wire = &paths.wire[name];
     let mut items = TokenStream::new();
     for e in &package.enums {
         items.extend(enumeration(e));
     }
+    items.extend(id_types(package));
     for message in &package.messages {
-        let anchor = package.components.iter().any(|c| &c.anchor == message);
-        items.extend(structure(message, wire, anchor));
+        items.extend(structure(message, &at));
     }
     items.extend(handler_context());
     let mut refusals: Vec<&MessageDescriptor> = Vec::new();
@@ -97,37 +161,8 @@ pub(crate) fn markup_package(package: &Package, wire: &syn::Path) -> String {
             items.extend(refusal_choice(input));
         }
     }
-    let mut messages: Vec<&MessageDescriptor> = Vec::new();
-    for component in &package.components {
-        let declared = component
-            .inputs
-            .iter()
-            .flat_map(|i| std::iter::once(&i.message).chain(&i.refuses))
-            .chain(&component.events);
-        for message in declared {
-            if !messages.contains(&message) {
-                messages.push(message);
-            }
-        }
-    }
-    items.extend(wire_settings(&package.messages, wire));
-    let root = root();
-    for message in messages {
-        let name = ident(message.name());
-        items.extend(quote! {
-            impl #root::markup::DomainMessage for #name {
-                type Wire = #wire::#name;
-
-                fn to_wire(&self) -> #wire::#name {
-                    #wire::#name::from(self.clone())
-                }
-
-                fn from_wire(wire: #wire::#name) -> Result<Self, #root::WireError> {
-                    #name::try_from(wire)
-                }
-            }
-        });
-    }
+    items.extend(wire_settings(&package.messages, &at));
+    items.extend(domain_messages(package, &at));
     for component in package
         .components
         .iter()
@@ -142,6 +177,50 @@ pub(crate) fn markup_package(package: &Package, wire: &syn::Path) -> String {
         out.push_str(interface);
     }
     out
+}
+
+/// The `DomainMessage` impl of every state anchor, input, refusal and
+/// event of the package's components, each once.
+fn domain_messages(package: &Package, at: &Layer) -> TokenStream {
+    let mut items = TokenStream::new();
+    let mut messages: Vec<&MessageDescriptor> = Vec::new();
+    for component in &package.components {
+        let declared = component
+            .state
+            .then_some(&component.anchor)
+            .into_iter()
+            .chain(
+                component
+                    .inputs
+                    .iter()
+                    .flat_map(|i| std::iter::once(&i.message).chain(&i.refuses)),
+            )
+            .chain(&component.events);
+        for message in declared {
+            if !messages.contains(&message) {
+                messages.push(message);
+            }
+        }
+    }
+    let root = root();
+    for message in messages {
+        let name = ident(&message_name(message));
+        let w = at.wire_type(message);
+        items.extend(quote! {
+            impl #root::markup::DomainMessage for #name {
+                type Wire = #w;
+
+                fn to_wire(&self) -> #w {
+                    #w::from(self.clone())
+                }
+
+                fn from_wire(wire: #w) -> Result<Self, #root::WireError> {
+                    #name::try_from(wire)
+                }
+            }
+        });
+    }
+    items
 }
 
 /// The event type of a domain with no events (`{Component}Event`, an enum
@@ -176,13 +255,17 @@ fn no_events_message(component: &crate::model::Component, wire: &syn::Path) -> T
 /// to compile with the named error, `angzarr-codegen-wire-bytes` or
 /// `angzarr-codegen-wire-map`, at the field, instead of a type mismatch
 /// deep in a conversion. Nothing is emitted for messages holding neither.
-fn wire_settings(messages: &[MessageDescriptor], wire: &syn::Path) -> TokenStream {
+fn wire_settings(messages: &[MessageDescriptor], at: &Layer) -> TokenStream {
     let (mut bytes, mut maps) = (false, false);
     let mut checks = Vec::new();
     for message in messages {
-        let name = ident(message.name());
+        let w = at.wire_type(message);
         let mut fields = Vec::new();
-        for field in message.fields() {
+        // A oneof's arms are in prost's choice, not fields of the message.
+        for field in message
+            .fields()
+            .filter(|f| f.containing_oneof().is_none_or(|o| o.is_synthetic()))
+        {
             let f = ident(field.name());
             if field.is_map() {
                 maps = true;
@@ -201,7 +284,7 @@ fn wire_settings(messages: &[MessageDescriptor], wire: &syn::Path) -> TokenStrea
         }
         if !fields.is_empty() {
             checks.push(quote! {
-                const _: fn(&#wire::#name) = |wire| {
+                const _: fn(&#w) = |wire| {
                     #(#fields)*
                 };
             });
@@ -611,7 +694,10 @@ fn business_status(code: i32) -> syn::Ident {
 /// name ([`wire_name`]), bytes their lower-case hex, a bool or a float
 /// its Rust text. A message, list or map field is not an arg (`None`).
 fn field_arg(field: &FieldDescriptor) -> Option<TokenStream> {
-    if field.is_list() || field.is_map() {
+    if field.is_list()
+        || field.is_map()
+        || field.containing_oneof().is_some_and(|o| !o.is_synthetic())
+    {
         return None;
     }
     let arg = quote!(::angzarr_embedded::angzarr_diagnostic::Arg);
@@ -900,11 +986,108 @@ fn enumeration(e: &EnumDescriptor) -> TokenStream {
     }
 }
 
-fn structure(message: &MessageDescriptor, wire: &syn::Path, anchor: bool) -> TokenStream {
+/// Each id newtype the package's messages declare (`id_type` on a UUID
+/// field), once: angzarr-proto's `Uuid` under the name, with its
+/// conversions both ways and its text (canonical hyphenated, as `Uuid`'s).
+fn id_types(package: &Package) -> TokenStream {
     let root = root();
-    let name = ident(message.name());
+    let uuid = quote!(#root::v1::Uuid);
+    let mut seen: Vec<String> = Vec::new();
+    let mut items = TokenStream::new();
+    for field in package.messages.iter().flat_map(|m| m.fields()) {
+        let Some(id) = crate::options::id_type(&field) else {
+            continue;
+        };
+        if seen.contains(&id) {
+            continue;
+        }
+        let doc = format!(" An id: a UUID, as `{}` holds it.", field.full_name());
+        let name = ident(&id);
+        items.extend(quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, Default, PartialEq)]
+            pub struct #name(pub #uuid);
+
+            impl From<#uuid> for #name {
+                fn from(value: #uuid) -> Self {
+                    #name(value)
+                }
+            }
+
+            impl From<#name> for #uuid {
+                fn from(value: #name) -> Self {
+                    value.0
+                }
+            }
+
+            impl ::std::fmt::Display for #name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    ::std::fmt::Display::fmt(&self.0, f)
+                }
+            }
+
+            impl ::std::str::FromStr for #name {
+                type Err = #root::ids::UuidError;
+
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    s.parse().map(#name)
+                }
+            }
+        });
+        seen.push(id);
+    }
+    items
+}
+
+/// Whether every field of `message` has a `Default`, so its domain type
+/// derives one: not a singular enum (closed: its zero is no value), nor a
+/// oneof's choice, nor a singular message without one. `visiting` breaks
+/// a cycle of singular messages, which has none.
+fn defaultable(message: &MessageDescriptor, visiting: &mut Vec<String>) -> bool {
+    if visiting.iter().any(|v| v == message.full_name()) {
+        return false;
+    }
+    visiting.push(message.full_name().to_string());
+    let all = message.fields().all(|f| {
+        if f.is_list() || f.is_map() {
+            return true;
+        }
+        match f.containing_oneof() {
+            Some(o) if o.is_synthetic() => return true,
+            Some(_) => return false,
+            None => {}
+        }
+        match f.kind() {
+            Kind::Enum(_) => false,
+            Kind::Message(m) if crate::model::mapped_as_is(&m) => true,
+            Kind::Message(m) => defaultable(&m, visiting),
+            _ => true,
+        }
+    });
+    visiting.pop();
+    all
+}
+
+fn structure(message: &MessageDescriptor, at: &Layer) -> TokenStream {
+    let root = root();
+    let name = ident(&message_name(message));
+    let wire = at.wire_type(message);
     let full = message.full_name();
-    let fields: Vec<Field> = message.fields().map(|f| Field::of(&f, wire)).collect();
+    let mut fields: Vec<Field> = Vec::new();
+    let mut choices = TokenStream::new();
+    for f in message.fields() {
+        match f.containing_oneof() {
+            Some(oneof) if !oneof.is_synthetic() => {
+                if fields.iter().any(|known| known.proto_name == oneof.name()) {
+                    continue;
+                }
+                let (field, choice) = Field::choice(&oneof, at);
+                fields.push(field);
+                choices.extend(choice);
+            }
+            _ => fields.push(Field::of(&f, at)),
+        }
+    }
     let decls = fields.iter().map(|f| {
         let (n, ty) = (&f.name, f.shape.domain_type());
         quote!(pub #n: #ty)
@@ -924,7 +1107,7 @@ fn structure(message: &MessageDescriptor, wire: &syn::Path, anchor: bool) -> Tok
     } else {
         quote!(value)
     };
-    let derives = if anchor {
+    let derives = if defaultable(message, &mut Vec::new()) {
         quote!(#[derive(Clone, Debug, Default, PartialEq)])
     } else {
         quote!(#[derive(Clone, Debug, PartialEq)])
@@ -933,19 +1116,21 @@ fn structure(message: &MessageDescriptor, wire: &syn::Path, anchor: bool) -> Tok
         #derives
         pub struct #name { #(#decls),* }
 
-        impl From<#name> for #wire::#name {
+        impl From<#name> for #wire {
             fn from(#param: #name) -> Self {
-                #wire::#name { #(#to),* }
+                #wire { #(#to),* }
             }
         }
 
-        impl TryFrom<#wire::#name> for #name {
+        impl TryFrom<#wire> for #name {
             type Error = #root::WireError;
 
-            fn try_from(#param: #wire::#name) -> Result<Self, Self::Error> {
+            fn try_from(#param: #wire) -> Result<Self, Self::Error> {
                 Ok(#name { #(#from),* })
             }
         }
+
+        #choices
     }
 }
 
@@ -957,21 +1142,21 @@ struct Field {
 }
 
 impl Field {
-    fn of(field: &FieldDescriptor, wire: &syn::Path) -> Field {
+    fn of(field: &FieldDescriptor, at: &Layer) -> Field {
         let shape = if field.is_map() {
             let Kind::Message(entry) = field.kind() else {
                 unreachable!("a map field's kind is its entry message")
             };
             Shape::Map(
-                Elem::of(&entry.map_entry_key_field(), wire).domain_type(),
-                Elem::of(&entry.map_entry_value_field(), wire),
+                Elem::of(&entry.map_entry_key_field(), at).domain_type(),
+                Elem::of(&entry.map_entry_value_field(), at),
             )
         } else if field.is_list() {
-            Shape::Repeated(Elem::of(field, wire))
+            Shape::Repeated(Elem::of(field, at))
         } else if field.containing_oneof().is_some_and(|o| o.is_synthetic()) {
-            Shape::Optional(Elem::of(field, wire))
+            Shape::Optional(Elem::of(field, at))
         } else {
-            Shape::Single(Elem::of(field, wire))
+            Shape::Single(Elem::of(field, at))
         };
         Field {
             name: ident(field.name()),
@@ -979,29 +1164,82 @@ impl Field {
             shape,
         }
     }
+
+    /// The field holding `oneof`'s choice, and the choice: an enum of a
+    /// variant per arm, named after the message and the oneof.
+    fn choice(oneof: &prost_reflect::OneofDescriptor, at: &Layer) -> (Field, TokenStream) {
+        let name = ident(&choice_name(oneof));
+        let arms: Vec<ChoiceArm> = oneof
+            .fields()
+            .map(|f| ChoiceArm {
+                variant: ident(&upper_camel(f.name())),
+                proto_name: f.name().to_string(),
+                elem: Elem::of(&f, at),
+            })
+            .collect();
+        let variants = arms.iter().map(|a| {
+            let (v, ty) = (&a.variant, a.elem.domain_type());
+            quote!(#v(#ty))
+        });
+        let doc = format!(" The choice of `{}`: one of its arms.", oneof.full_name());
+        let declaration = quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum #name { #(#variants),* }
+        };
+        let field = Field {
+            name: ident(oneof.name()),
+            proto_name: oneof.name().to_string(),
+            shape: Shape::Choice {
+                domain: name,
+                wire: at.wire_choice(oneof),
+                arms,
+            },
+        };
+        (field, declaration)
+    }
+}
+
+/// One arm of a oneof: its variant, in the domain choice and prost's, its
+/// proto name and its value.
+struct ChoiceArm {
+    variant: syn::Ident,
+    proto_name: String,
+    elem: Elem,
 }
 
 /// What one value of a field is.
 enum Elem {
     /// A scalar: the same Rust type on both sides.
     Scalar(TokenStream),
-    /// A `google.protobuf.Timestamp`: angzarr-embedded's `Timestamp` on both sides.
-    Timestamp,
+    /// A message held as its own type on both sides: angzarr-embedded's
+    /// `Timestamp`, prost's `Duration` or angzarr-proto's `Uuid`.
+    AsIs(TokenStream),
+    /// An id newtype of angzarr-proto's `Uuid` (`id_type`).
+    Id(TokenStream),
     /// A domain enum; `i32` on the wire.
-    Enum(syn::Ident),
+    Enum(TokenStream),
     /// A domain message, and its wire type.
-    Message(syn::Ident, TokenStream),
+    Message(TokenStream, TokenStream),
 }
 
 impl Elem {
-    fn of(field: &FieldDescriptor, wire: &syn::Path) -> Elem {
+    fn of(field: &FieldDescriptor, at: &Layer) -> Elem {
+        let root = root();
         match field.kind() {
-            Kind::Message(m) if m.full_name() == TIMESTAMP => Elem::Timestamp,
-            Kind::Message(m) => {
-                let name = ident(m.name());
-                Elem::Message(name.clone(), quote!(#wire::#name))
+            Kind::Message(m) if m.full_name() == TIMESTAMP => Elem::AsIs(quote!(#root::Timestamp)),
+            Kind::Message(m) if m.full_name() == DURATION => {
+                Elem::AsIs(quote!(::prost_types::Duration))
             }
-            Kind::Enum(e) => Elem::Enum(ident(&enum_name(&e))),
+            Kind::Message(m) if m.full_name() == UUID => match crate::options::id_type(field) {
+                Some(id) => Elem::Id(at.domain(field.parent_message().package_name(), &id)),
+                None => Elem::AsIs(quote!(#root::v1::Uuid)),
+            },
+            Kind::Message(m) => Elem::Message(
+                at.domain(m.package_name(), &message_name(&m)),
+                at.wire_type(&m),
+            ),
+            Kind::Enum(e) => Elem::Enum(at.domain(e.package_name(), &enum_name(&e))),
             Kind::Double => Elem::Scalar(quote!(f64)),
             Kind::Float => Elem::Scalar(quote!(f32)),
             Kind::Int32 | Kind::Sint32 | Kind::Sfixed32 => Elem::Scalar(quote!(i32)),
@@ -1015,11 +1253,37 @@ impl Elem {
     }
 
     fn domain_type(&self) -> TokenStream {
+        match self {
+            Elem::Scalar(ty) | Elem::AsIs(ty) | Elem::Id(ty) | Elem::Enum(ty) => ty.clone(),
+            Elem::Message(ty, _) => ty.clone(),
+        }
+    }
+
+    /// The function taking one domain value to its wire value, or `None`
+    /// where the two are one type.
+    fn wire_fn(&self) -> Option<TokenStream> {
         let root = root();
         match self {
-            Elem::Scalar(ty) => ty.clone(),
-            Elem::Timestamp => quote!(#root::Timestamp),
-            Elem::Enum(name) | Elem::Message(name, _) => quote!(#name),
+            Elem::Scalar(_) | Elem::AsIs(_) => None,
+            Elem::Id(_) => Some(quote!(#root::v1::Uuid::from)),
+            Elem::Enum(_) => Some(quote!(i32::from)),
+            Elem::Message(_, w) => Some(quote!(#w::from)),
+        }
+    }
+
+    /// `value`, one wire value, as its domain value (`?` refusing what the
+    /// domain type cannot hold), `field` naming it in a refusal.
+    fn decoded_one(&self, value: TokenStream, message: &str, field: &str) -> TokenStream {
+        let root = root();
+        match self {
+            Elem::Scalar(_) | Elem::AsIs(_) => value,
+            Elem::Id(id) => quote!(#id::from(#value)),
+            Elem::Enum(e) => quote! {
+                #e::try_from(#value).map_err(|value| #root::WireError::UnknownEnum {
+                    message: #message, field: #field, value
+                })?
+            },
+            Elem::Message(d, _) => quote!(#d::try_from(#value)?),
         }
     }
 }
@@ -1033,6 +1297,13 @@ enum Shape {
     Repeated(Elem),
     /// A map, by its key's Rust type.
     Map(TokenStream, Elem),
+    /// A oneof: the domain choice, prost's, and the arms. Required: an
+    /// unset oneof is refused.
+    Choice {
+        domain: syn::Ident,
+        wire: TokenStream,
+        arms: Vec<ChoiceArm>,
+    },
 }
 
 impl Shape {
@@ -1051,30 +1322,43 @@ impl Shape {
                 let t = e.domain_type();
                 quote!(::std::collections::BTreeMap<#k, #t>)
             }
+            Shape::Choice { domain, .. } => quote!(#domain),
         }
     }
 
     /// `value`, a domain value of this shape, as its wire value.
     fn encoded(&self, value: TokenStream) -> TokenStream {
         match self {
-            Shape::Single(Elem::Scalar(_)) => value,
-            Shape::Single(Elem::Timestamp) => quote!(Some(#value)),
-            Shape::Single(Elem::Enum(_)) => quote!(i32::from(#value)),
-            Shape::Single(Elem::Message(_, w)) => quote!(Some(#w::from(#value))),
-            Shape::Optional(Elem::Scalar(_) | Elem::Timestamp) => value,
-            Shape::Optional(Elem::Enum(_)) => quote!(#value.map(i32::from)),
-            Shape::Optional(Elem::Message(_, w)) => quote!(#value.map(#w::from)),
-            Shape::Repeated(Elem::Scalar(_) | Elem::Timestamp) => value,
-            Shape::Repeated(Elem::Enum(_)) => quote!(#value.into_iter().map(i32::from).collect()),
-            Shape::Repeated(Elem::Message(_, w)) => {
-                quote!(#value.into_iter().map(#w::from).collect())
-            }
-            Shape::Map(_, Elem::Scalar(_) | Elem::Timestamp) => value,
-            Shape::Map(_, Elem::Enum(_)) => {
-                quote!(#value.into_iter().map(|(k, v)| (k, i32::from(v))).collect())
-            }
-            Shape::Map(_, Elem::Message(_, w)) => {
-                quote!(#value.into_iter().map(|(k, v)| (k, #w::from(v))).collect())
+            Shape::Single(e @ (Elem::Scalar(_) | Elem::Enum(_))) => match e.wire_fn() {
+                Some(f) => quote!(#f(#value)),
+                None => value,
+            },
+            Shape::Single(e) => match e.wire_fn() {
+                Some(f) => quote!(Some(#f(#value))),
+                None => quote!(Some(#value)),
+            },
+            Shape::Optional(e) => match e.wire_fn() {
+                Some(f) => quote!(#value.map(#f)),
+                None => value,
+            },
+            Shape::Repeated(e) => match e.wire_fn() {
+                Some(f) => quote!(#value.into_iter().map(#f).collect()),
+                None => value,
+            },
+            Shape::Map(_, e) => match e.wire_fn() {
+                Some(f) => quote!(#value.into_iter().map(|(k, v)| (k, #f(v))).collect()),
+                None => value,
+            },
+            Shape::Choice { domain, wire, arms } => {
+                let arms = arms.iter().map(|a| {
+                    let v = &a.variant;
+                    let inner = match a.elem.wire_fn() {
+                        Some(f) => quote!(#f(v)),
+                        None => quote!(v),
+                    };
+                    quote!(#domain::#v(v) => #wire::#v(#inner))
+                });
+                quote!(Some(match #value { #(#arms),* }))
             }
         }
     }
@@ -1089,17 +1373,19 @@ impl Shape {
         let unknown = quote! {
             |value| #root::WireError::UnknownEnum { message: #message, field: #field, value }
         };
+        let one = |e: &Elem, v: TokenStream| e.decoded_one(v, message, field);
         match self {
-            Shape::Single(Elem::Scalar(_)) => value,
-            Shape::Single(Elem::Timestamp) => quote!(#value.ok_or(#missing)?),
-            Shape::Single(Elem::Enum(e)) => quote!(#e::try_from(#value).map_err(#unknown)?),
-            Shape::Single(Elem::Message(d, _)) => quote!(#d::try_from(#value.ok_or(#missing)?)?),
-            Shape::Optional(Elem::Scalar(_) | Elem::Timestamp) => value,
+            Shape::Single(e @ (Elem::Scalar(_) | Elem::Enum(_))) => one(e, value),
+            Shape::Single(e) => one(e, quote!(#value.ok_or(#missing)?)),
+            Shape::Optional(Elem::Scalar(_) | Elem::AsIs(_))
+            | Shape::Repeated(Elem::Scalar(_) | Elem::AsIs(_))
+            | Shape::Map(_, Elem::Scalar(_) | Elem::AsIs(_)) => value,
+            Shape::Optional(Elem::Id(id)) => quote!(#value.map(#id::from)),
             Shape::Optional(Elem::Enum(e)) => {
                 quote!(#value.map(|v| #e::try_from(v).map_err(#unknown)).transpose()?)
             }
             Shape::Optional(Elem::Message(d, _)) => quote!(#value.map(#d::try_from).transpose()?),
-            Shape::Repeated(Elem::Scalar(_) | Elem::Timestamp) => value,
+            Shape::Repeated(Elem::Id(id)) => quote!(#value.into_iter().map(#id::from).collect()),
             Shape::Repeated(Elem::Enum(e)) => quote! {
                 #value
                     .into_iter()
@@ -1109,7 +1395,9 @@ impl Shape {
             Shape::Repeated(Elem::Message(d, _)) => quote! {
                 #value.into_iter().map(#d::try_from).collect::<Result<Vec<_>, _>>()?
             },
-            Shape::Map(_, Elem::Scalar(_) | Elem::Timestamp) => value,
+            Shape::Map(_, Elem::Id(id)) => {
+                quote!(#value.into_iter().map(|(k, v)| (k, #id::from(v))).collect())
+            }
             Shape::Map(_, Elem::Enum(e)) => quote! {
                 #value
                     .into_iter()
@@ -1122,6 +1410,14 @@ impl Shape {
                     .map(|(k, v)| #d::try_from(v).map(|v| (k, v)))
                     .collect::<Result<::std::collections::BTreeMap<_, _>, _>>()?
             },
+            Shape::Choice { domain, wire, arms } => {
+                let arms = arms.iter().map(|a| {
+                    let v = &a.variant;
+                    let inner = a.elem.decoded_one(quote!(v), message, &a.proto_name);
+                    quote!(#wire::#v(v) => #domain::#v(#inner))
+                });
+                quote!(match #value.ok_or(#missing)? { #(#arms),* })
+            }
         }
     }
 }

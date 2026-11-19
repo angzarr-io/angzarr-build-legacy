@@ -233,7 +233,7 @@ fn test_a_uuid_is_angzarrs_own_type() {
     let source = source("shapes.order.v1");
     assert!(
         flat(&source)
-            .contains("WireError::Missing{message:\"shapes.order.v1.PlaceOrder\",field:\"order\"}"),
+            .contains("WireError::Missing{message:\"shapes.order.v1.PlaceOrder\",field:\"order\""),
         "{source}"
     );
 }
@@ -327,7 +327,7 @@ fn test_a_oneof_converts_through_prosts_choice_and_is_required() {
     for expected in [
         "crate::wire::shapes::order::v1::place_order::Payment::Card(",
         "crate::wire::shapes::order::v1::place_order::Payment::Credit(",
-        "WireError::Missing{message:\"shapes.order.v1.PlaceOrder\",field:\"payment\"}",
+        "WireError::Missing{message:\"shapes.order.v1.PlaceOrder\",field:\"payment\"",
     ] {
         assert!(
             flat(&source).contains(expected),

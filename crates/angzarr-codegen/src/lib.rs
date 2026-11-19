@@ -12,6 +12,7 @@ mod descriptor;
 mod error;
 mod model;
 mod names;
+mod options;
 mod python;
 mod rust;
 mod scaffold;
@@ -133,24 +134,65 @@ pub struct Generated {
     pub source: String,
 }
 
-/// One [`Generated`] per package, each emitted with its prost types' Rust
-/// path from `wire`.
+/// Where the generated code of each package is, as Rust paths: its prost
+/// types (`wire`) and its domain layer (`domain`), by proto package.
+pub(crate) struct Paths {
+    pub wire: std::collections::BTreeMap<String, syn::Path>,
+    pub domain: std::collections::BTreeMap<String, syn::Path>,
+}
+
+impl Paths {
+    /// The paths of `wire` and `domain` that parse as Rust paths.
+    fn of(wire: &[(&str, &str)], domain: &[(&str, &str)]) -> Paths {
+        let parsed = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .filter_map(|(p, rust)| {
+                    syn::parse_str::<syn::Path>(rust)
+                        .ok()
+                        .map(|path| (p.to_string(), path))
+                })
+                .collect()
+        };
+        Paths {
+            wire: parsed(wire),
+            domain: parsed(domain),
+        }
+    }
+}
+
+/// One [`Generated`] per package, each emitted with the paths of its prost
+/// types and of every other package's layer it references: a package
+/// without a wire path, or one whose types another holds without a domain
+/// path, refused.
 fn generate(
     packages: std::collections::BTreeMap<String, model::Package>,
     wire: &[(&str, &str)],
-    emit: fn(&model::Package, &syn::Path) -> String,
+    domain: &[(&str, &str)],
+    emit: fn(&model::Package, &str, &Paths) -> String,
 ) -> Result<Vec<Generated>, CodegenError> {
+    let paths = Paths::of(wire, domain);
+    for (package, content) in &packages {
+        if !paths.wire.contains_key(package) {
+            return Err(UseError::NoWirePath {
+                package: package.clone(),
+            }
+            .into());
+        }
+        for (message, other) in content.foreign() {
+            if !paths.domain.contains_key(&other) {
+                return Err(UseError::NoDomainPath {
+                    package: other,
+                    message,
+                }
+                .into());
+            }
+        }
+    }
     let mut generated = Vec::with_capacity(packages.len());
     for (package, content) in packages {
-        let path = wire
-            .iter()
-            .find(|(p, _)| *p == package)
-            .and_then(|(_, rust)| syn::parse_str::<syn::Path>(rust).ok())
-            .ok_or_else(|| UseError::NoWirePath {
-                package: package.clone(),
-            })?;
         generated.push(Generated {
-            source: headed(".rs", emit(&content, &path)),
+            source: headed(".rs", emit(&content, &package, &paths)),
             package,
         });
     }

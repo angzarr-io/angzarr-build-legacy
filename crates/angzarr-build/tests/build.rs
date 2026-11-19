@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use angzarr_build::{BuildError, markup_domain_into, wire_into};
+use angzarr_build::{BuildError, markup_domain_into, markup_domain_with_into, wire_into};
 
 use angzarr_test_dir::TestDir;
 
@@ -34,6 +34,35 @@ fn test_wire_into_writes_prost_types_by_package() {
             .any(|i| matches!(i, syn::Item::Struct(s) if s.ident == "CartState")),
         "prost's CartState"
     );
+}
+
+/// The shapes fixtures, which import the codegen options: importable
+/// without an include of their own, as angzarr's protos are.
+const SHAPES: &[&str] = &[
+    "shapes/common/v1/common.proto",
+    "shapes/catalog/v1/catalog.proto",
+    "shapes/order/v1/order.proto",
+];
+
+#[test]
+fn test_markup_domain_with_into_writes_a_layer_per_package_each_at_its_path() {
+    let out = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-domain-with"));
+    let packages = ["shapes.common.v1", "shapes.catalog.v1", "shapes.order.v1"];
+    let wire: Vec<(&str, &str)> = packages.iter().map(|p| (*p, "crate::wire")).collect();
+    let domain = [
+        ("shapes.common.v1", "crate::common"),
+        ("shapes.catalog.v1", "crate::catalog"),
+        ("shapes.order.v1", "crate::order"),
+    ];
+    markup_domain_with_into(&out, SHAPES, &[&fixtures()], &wire, &domain).unwrap();
+    for package in packages {
+        assert!(
+            out.join(format!("{package}.domain.rs")).exists(),
+            "{package}"
+        );
+    }
+    let order = std::fs::read_to_string(out.join("shapes.order.v1.domain.rs")).unwrap();
+    assert!(order.contains("Vec<crate::catalog::Item>"), "{order}");
 }
 
 #[test]
