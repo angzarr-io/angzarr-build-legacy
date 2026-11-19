@@ -12,12 +12,18 @@ use super::{text, texts};
 pub enum ProtoError {
     /// The bytes are not a descriptor set protoc could have written.
     Descriptors { detail: String },
-    /// A oneof, which the domain layer does not map yet.
-    Oneof { message: String, oneof: String },
-    /// A message or enum declared inside a message, which the domain layer
-    /// does not map yet.
-    NestedType { message: String, nested: String },
-    /// A well-known type other than `google.protobuf.Timestamp`.
+    /// Two of a package's domain items taking one name: types (a nested
+    /// one named after its enclosing messages), a oneof's choice
+    /// (`<Message><Oneof>`, `second` the oneof's full name) or an id
+    /// newtype (`second` the field declaring it). Nothing is renamed
+    /// silently.
+    NameTaken {
+        name: String,
+        first: String,
+        second: String,
+    },
+    /// A well-known type the domain layer does not map: every one but
+    /// `google.protobuf.Timestamp` and `google.protobuf.Duration`.
     WellKnownType {
         message: String,
         field: String,
@@ -60,8 +66,7 @@ impl Diagnostic for ProtoError {
     fn code(&self) -> &'static str {
         match self {
             ProtoError::Descriptors { .. } => code!("descriptors"),
-            ProtoError::Oneof { .. } => code!("oneof"),
-            ProtoError::NestedType { .. } => code!("nested-type"),
+            ProtoError::NameTaken { .. } => code!("name-taken"),
             ProtoError::WellKnownType { .. } => code!("well-known-type"),
             ProtoError::EnumZero { .. } => code!("enum-zero"),
             ProtoError::ReservedName { .. } => code!("reserved-name"),
@@ -74,8 +79,11 @@ impl Diagnostic for ProtoError {
         use ProtoError as E;
         match self {
             E::Descriptors { detail } => texts![detail],
-            E::Oneof { message, oneof } => texts![message, oneof],
-            E::NestedType { message, nested } => texts![message, nested],
+            E::NameTaken {
+                name,
+                first,
+                second,
+            } => texts![name, first, second],
             E::WellKnownType {
                 message,
                 field,
@@ -104,13 +112,10 @@ pub(super) fn samples() -> Vec<ProtoError> {
         E::Descriptors {
             detail: text("detail"),
         },
-        E::Oneof {
-            message: text("message"),
-            oneof: text("oneof"),
-        },
-        E::NestedType {
-            message: text("message"),
-            nested: text("nested"),
+        E::NameTaken {
+            name: text("name"),
+            first: text("first"),
+            second: text("second"),
         },
         E::WellKnownType {
             message: text("message"),

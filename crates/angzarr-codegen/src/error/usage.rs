@@ -15,6 +15,10 @@ pub enum UseError {
     FileNotInSet { file: String },
     /// A package with domain types but no Rust path for its prost types.
     NoWirePath { package: String },
+    /// A package whose types `message`, of another package, holds, but no
+    /// Rust path for its domain layer: its types are referenced there,
+    /// never duplicated.
+    NoDomainPath { package: String, message: String },
     /// The protos declare no component of the domain, or of the name,
     /// asked for.
     PythonNoDomain { domain: String },
@@ -45,6 +49,7 @@ impl Diagnostic for UseError {
         match self {
             UseError::FileNotInSet { .. } => code!("file-not-in-set"),
             UseError::NoWirePath { .. } => code!("no-wire-path"),
+            UseError::NoDomainPath { .. } => code!("no-domain-path"),
             UseError::PythonNoDomain { .. } => code!("python-no-domain"),
             UseError::ScaffoldImplNotFound { .. } => code!("scaffold-impl-not-found"),
             UseError::InputMismatch { .. } => code!("input-mismatch"),
@@ -56,6 +61,7 @@ impl Diagnostic for UseError {
         match self {
             E::FileNotInSet { file } => texts![file],
             E::NoWirePath { package } => texts![package],
+            E::NoDomainPath { package, message } => texts![package, message],
             E::PythonNoDomain { domain } => texts![domain],
             E::ScaffoldImplNotFound { path, component } => texts![path, component],
             E::InputMismatch {
@@ -75,6 +81,10 @@ pub(super) fn samples() -> Vec<UseError> {
         E::FileNotInSet { file: text("file") },
         E::NoWirePath {
             package: text("package"),
+        },
+        E::NoDomainPath {
+            package: text("package"),
+            message: text("message"),
         },
         E::PythonNoDomain {
             domain: text("domain"),

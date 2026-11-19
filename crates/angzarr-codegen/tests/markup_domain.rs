@@ -352,11 +352,12 @@ fn test_markup_domain_maps_a_nested_enum_after_its_message() {
     );
 }
 
-/// Only a component's state derives `Default`, and the markup domain layer
-/// holds no state (the markup's own type is the state).
+/// A domain type derives `Default` when every field has one: a closed
+/// enum has none (its zero is no value), so a type holding one singular
+/// has none either; a list of them, or an `Option`, has.
 #[test]
-fn test_markup_domain_derives_default_for_no_type() {
-    let defaulted: Vec<String> = buyin()
+fn test_markup_domain_derives_default_where_every_field_has_one() {
+    let defaulted: Vec<String> = shop()
         .items
         .iter()
         .filter_map(|i| match i {
@@ -370,7 +371,11 @@ fn test_markup_domain_derives_default_for_no_type() {
             _ => None,
         })
         .collect::<Vec<String>>();
-    assert_eq!(defaulted, Vec::<String>::new());
+    assert!(
+        defaulted.contains(&"CheckedOut".to_string()),
+        "{defaulted:?}"
+    );
+    assert!(!defaulted.contains(&"Line".to_string()), "{defaulted:?}");
 }
 
 #[test]
@@ -513,26 +518,37 @@ fn test_markup_domain_refuses_an_enum_whose_zero_is_a_value() {
     );
 }
 
+/// A oneof is mapped: a choice of its arms (`<Message><Oneof>`), held
+/// once in the message.
 #[test]
-fn test_markup_domain_refuses_a_oneof() {
+fn test_markup_domain_maps_a_oneof() {
+    let generated = markup_domain(
+        &descriptors(&["bad/v1/oneof.proto"]),
+        &["bad/v1/oneof.proto"],
+        BAD_WIRE,
+    )
+    .expect("a oneof is mapped");
+    let file = syn::parse_file(&generated[0].source).unwrap();
     assert_eq!(
-        refusal("bad/v1/oneof.proto"),
-        CodegenError::Proto(ProtoError::Oneof {
-            message: "bad.v1.Poke".to_string(),
-            oneof: "shape".to_string(),
-        })
+        variants(&file, "PokeShape"),
+        s(&[("Round", "(String)"), ("Square", "(String)")])
     );
+    assert_eq!(fields(&file, "Poke"), s(&[("shape", "PokeShape")]));
 }
 
+/// A nested message is mapped, named after its enclosing message
+/// (`<Message><Nested>`), as a nested enum is.
 #[test]
-fn test_markup_domain_refuses_a_nested_type() {
-    assert_eq!(
-        refusal("bad/v1/nested.proto"),
-        CodegenError::Proto(ProtoError::NestedType {
-            message: "bad.v1.Poke".to_string(),
-            nested: "bad.v1.Poke.Inner".to_string(),
-        })
-    );
+fn test_markup_domain_maps_a_nested_message() {
+    let generated = markup_domain(
+        &descriptors(&["bad/v1/nested.proto"]),
+        &["bad/v1/nested.proto"],
+        BAD_WIRE,
+    )
+    .expect("a nested message is mapped");
+    let file = syn::parse_file(&generated[0].source).unwrap();
+    assert_eq!(fields(&file, "Poke"), s(&[("inner", "PokeInner")]));
+    assert_eq!(fields(&file, "PokeInner"), s(&[("x", "String")]));
 }
 
 #[test]
@@ -547,13 +563,13 @@ fn test_markup_domain_refuses_a_component_of_no_kind() {
 }
 
 #[test]
-fn test_markup_domain_refuses_a_well_known_type_other_than_timestamp() {
+fn test_markup_domain_refuses_a_well_known_type_it_does_not_map() {
     assert_eq!(
         refusal("bad/v1/well_known.proto"),
         CodegenError::Proto(ProtoError::WellKnownType {
             message: "bad.v1.Poke".to_string(),
             field: "timeout".to_string(),
-            type_name: "google.protobuf.Duration".to_string(),
+            type_name: "google.protobuf.Struct".to_string(),
         })
     );
 }

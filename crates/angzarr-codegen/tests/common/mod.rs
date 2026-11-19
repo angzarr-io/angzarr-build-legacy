@@ -32,6 +32,9 @@ pub fn spec() -> PathBuf {
 pub fn descriptors(files: &[&str]) -> Vec<u8> {
     let dir = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-scaffold-test"));
     let angzarr = angzarr_proto::protos::write_include_dir(&dir.join("angzarr")).unwrap();
+    let (codegen, source) = angzarr_codegen::CODEGEN_PROTO;
+    std::fs::create_dir_all(angzarr.join(codegen).parent().unwrap()).unwrap();
+    std::fs::write(angzarr.join(codegen), source).unwrap();
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let out: PathBuf = dir.join("set.bin");
     let protoc = std::env::var("PROTOC").unwrap_or_else(|_| "protoc".to_string());

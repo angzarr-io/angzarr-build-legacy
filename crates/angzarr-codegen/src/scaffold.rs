@@ -1492,6 +1492,17 @@ pub fn markup_domain(
     files: &[&str],
     wire: &[(&str, &str)],
 ) -> Result<Vec<Generated>, CodegenError> {
+    markup_domain_with(descriptor_set, files, wire, &[])
+}
+
+/// [`markup_domain`], each package's layer at the Rust path `domain` names
+/// for it.
+pub fn markup_domain_with(
+    descriptor_set: &[u8],
+    files: &[&str],
+    wire: &[(&str, &str)],
+    _domain: &[(&str, &str)],
+) -> Result<Vec<Generated>, CodegenError> {
     let mut packages = model::build_markup(descriptor_set, files)?;
     let components = model::components(descriptor_set, files, ALL_KINDS)?;
     for component in application(&components) {

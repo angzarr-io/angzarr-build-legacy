@@ -787,25 +787,6 @@ impl Reach {
         if !self.seen.insert(message.full_name().to_string()) {
             return Ok(());
         }
-        // A nested enum is mapped (as `<Message><Enum>`); a nested message
-        // is not yet.
-        let nested = message
-            .child_messages()
-            .filter(|m| !m.is_map_entry())
-            .map(|m| m.full_name().to_string())
-            .next();
-        if let Some(nested) = nested {
-            return Err(ProtoError::NestedType {
-                message: message.full_name().to_string(),
-                nested,
-            });
-        }
-        if let Some(oneof) = message.oneofs().find(|o| !o.is_synthetic()) {
-            return Err(ProtoError::Oneof {
-                message: message.full_name().to_string(),
-                oneof: oneof.name().to_string(),
-            });
-        }
         self.messages.push(message.clone());
         for field in message.fields() {
             let kind = match field.kind() {

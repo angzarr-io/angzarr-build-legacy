@@ -84,6 +84,15 @@ pub(crate) fn headed_files(files: Vec<ScaffoldFile>) -> Vec<ScaffoldFile> {
         .collect()
 }
 
+/// The codegen options (`io/angzarr/codegen/v1/codegen.proto`), as its
+/// import name and its source: what a proto imports to say how its domain
+/// type and its JSON are generated. A build writes it beside angzarr's own
+/// protos, so it is always importable.
+pub const CODEGEN_PROTO: (&str, &str) = (
+    "io/angzarr/codegen/v1/codegen.proto",
+    include_str!("../proto/io/angzarr/codegen/v1/codegen.proto"),
+);
+
 /// This crate's en-US messages: its package name, and its catalog, each id
 /// under that name (written by the build, `angzarr_diagnostic::build`).
 pub const EN_US: (&str, &str) = (
@@ -96,7 +105,7 @@ pub use python::{
 };
 pub use scaffold::{
     Completion, Existing, Notes, Owner, PinDrift, ScaffoldFile, adapters, complete, markup_domain,
-    register, register_only, scaffold, stand_ins,
+    markup_domain_with, register, register_only, scaffold, stand_ins,
 };
 
 /// The modules of the prost types of `files`' packages, nested as the

@@ -1,7 +1,7 @@
 syntax = "proto3";
 package bad.v1;
 import "io/angzarr/v1/options.proto";
-import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
 
 message ThingState {
   option (io.angzarr.v1.component) = {
@@ -18,7 +18,7 @@ message Poke {
     emits: ["bad.v1.Poked"]
   };
 
-  google.protobuf.Duration timeout = 1;
+  google.protobuf.Struct timeout = 1;
 }
 
 message Poked {
