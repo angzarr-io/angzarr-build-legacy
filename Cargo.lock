@@ -47,12 +47,12 @@ dependencies = [
 [[package]]
 name = "angzarr-diagnostic"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=b1445adf7450b09aad19b5ce09fdf6742da1f5b0#b1445adf7450b09aad19b5ce09fdf6742da1f5b0"
+source = "git+https://github.com/angzarr-io/angzarr?rev=03663846fc7609378739f616e785e88b99ba0a1c#03663846fc7609378739f616e785e88b99ba0a1c"
 
 [[package]]
 name = "angzarr-embedded-host-config"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr-embedded?rev=5cdb1906ff279e329805331e5dac18498319943a#5cdb1906ff279e329805331e5dac18498319943a"
+source = "git+https://github.com/angzarr-io/angzarr-embedded?rev=23a507fa952d498bca5647aa36c9e9e24128e403#23a507fa952d498bca5647aa36c9e9e24128e403"
 dependencies = [
  "angzarr-yaml",
  "serde",
@@ -61,7 +61,7 @@ dependencies = [
 [[package]]
 name = "angzarr-presentation"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=b1445adf7450b09aad19b5ce09fdf6742da1f5b0#b1445adf7450b09aad19b5ce09fdf6742da1f5b0"
+source = "git+https://github.com/angzarr-io/angzarr?rev=03663846fc7609378739f616e785e88b99ba0a1c#03663846fc7609378739f616e785e88b99ba0a1c"
 dependencies = [
  "angzarr-diagnostic",
  "fluent-bundle",
@@ -75,7 +75,7 @@ dependencies = [
 [[package]]
 name = "angzarr-proto"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=b1445adf7450b09aad19b5ce09fdf6742da1f5b0#b1445adf7450b09aad19b5ce09fdf6742da1f5b0"
+source = "git+https://github.com/angzarr-io/angzarr?rev=03663846fc7609378739f616e785e88b99ba0a1c#03663846fc7609378739f616e785e88b99ba0a1c"
 dependencies = [
  "bytes",
  "prost",
@@ -87,12 +87,12 @@ dependencies = [
 [[package]]
 name = "angzarr-test-dir"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=b1445adf7450b09aad19b5ce09fdf6742da1f5b0#b1445adf7450b09aad19b5ce09fdf6742da1f5b0"
+source = "git+https://github.com/angzarr-io/angzarr?rev=03663846fc7609378739f616e785e88b99ba0a1c#03663846fc7609378739f616e785e88b99ba0a1c"
 
 [[package]]
 name = "angzarr-yaml"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=b1445adf7450b09aad19b5ce09fdf6742da1f5b0#b1445adf7450b09aad19b5ce09fdf6742da1f5b0"
+source = "git+https://github.com/angzarr-io/angzarr?rev=03663846fc7609378739f616e785e88b99ba0a1c#03663846fc7609378739f616e785e88b99ba0a1c"
 dependencies = [
  "angzarr-diagnostic",
  "serde",
@@ -286,7 +286,7 @@ dependencies = [
  "globwalk",
  "humantime",
  "inventory",
- "itertools 0.13.0",
+ "itertools",
  "lazy-regex",
  "linked-hash-map",
  "once_cell",
@@ -304,7 +304,7 @@ checksum = "9e19cd9e8e7cfd79fbf844eb6a7334117973c01f6bad35571262b00891e60f1c"
 dependencies = [
  "cucumber-expressions",
  "inflections",
- "itertools 0.13.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "regex",
@@ -760,15 +760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -999,7 +990,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools",
  "log",
  "multimap",
  "petgraph",
@@ -1018,7 +1009,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
