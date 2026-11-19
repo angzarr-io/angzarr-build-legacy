@@ -14,6 +14,9 @@
 //!   Duration, oneofs, nested types and state anchors: wire types and
 //!   domain layers, whose tests (property tests) convert each domain type to
 //!   its wire type, through prost's bytes, and back.
+//! - `json-app`: the json fixture's wire types and their generated proto3
+//!   JSON, held to golden files, round-tripped (property tests) and
+//!   cross-checked with prost-reflect's canonical mapping.
 //! - `blackjack-app`: the blackjack example's protos (the spec's): the
 //!   generated layer and the scaffold of the day, `todo!()` bodies and all,
 //!   type-checked. `bare-app` is the same for a domain with no events. Nothing
@@ -258,6 +261,21 @@ fn test_the_shapes_apps_domain_types_round_trip_through_the_wire() {
     assert!(
         out.status.success(),
         "the shapes app's tests pass:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// `tests/local/json-app`: the generated JSON is its golden files, reads
+/// back what it writes, and agrees with prost-reflect's canonical mapping
+/// both ways.
+#[test]
+#[ignore = "builds angzarr-proto, prost-reflect and proptest: slow; `just test-slow`"]
+fn test_the_json_apps_json_is_golden_round_trips_and_agrees_with_prost_reflect() {
+    let out = cargo(&app("json-app"), &["test", "--quiet"]);
+    assert!(
+        out.status.success(),
+        "the json app's tests pass:\n{}\n{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );

@@ -38,8 +38,10 @@ dependencies = [
  "proc-macro2",
  "prost",
  "prost-reflect",
+ "prost-types",
  "quote",
  "serde",
+ "serde_json",
  "syn 3.0.9",
  "toml",
 ]

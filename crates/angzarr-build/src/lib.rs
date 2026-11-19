@@ -96,6 +96,29 @@ pub fn markup_domain_with_into(
     write_domain(out, generated)
 }
 
+/// The proto3 JSON of the prost types of `protos` (`angzarr-json.rs` in
+/// `OUT_DIR`, see `angzarr_codegen::json`), for the wire crate to
+/// `include!` in a module of its own: `wire` names each package's Rust
+/// path, as [`markup_domain`]'s does. Opt-in: [`wire`] alone generates no
+/// JSON. The wire crate depends on `serde`, and on `prost-types` and
+/// `angzarr-proto` (the well-known types and angzarr's UUID).
+pub fn json(protos: &[&str], includes: &[&str], wire: &[(&str, &str)]) -> Result<(), BuildError> {
+    json_into(&out_dir()?, protos, includes, wire)
+}
+
+/// [`json`], into `out`.
+pub fn json_into(
+    out: &Path,
+    protos: &[&str],
+    includes: &[&str],
+    wire: &[(&str, &str)],
+) -> Result<(), BuildError> {
+    let bytes = build_descriptors(out, protos, includes)?;
+    let source = angzarr_codegen::json(&bytes, protos, wire).map_err(BuildError::Codegen)?;
+    let path = out.join("angzarr-json.rs");
+    std::fs::write(&path, source).map_err(|e| io(&path, &e))
+}
+
 /// The generated `register(&mut Registry)` for every component in
 /// `protos` (`angzarr-register.rs` in `OUT_DIR`), for the crate root to
 /// `include!`.

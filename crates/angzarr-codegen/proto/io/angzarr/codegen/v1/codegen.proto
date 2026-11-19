@@ -24,13 +24,13 @@ message FieldCodegen {
   // under JSON_NAMES_PROTO).
   string json_key = 1;
   // An unset field is written as `null` instead of being left out: a
-  // proto3 `optional` field, a message field, or a oneof's arm. A set field
-  // is written as it always is.
+  // proto3 `optional` field or a message field. A set field is written as
+  // it always is.
   bool json_null = 2;
-  // A message field's own fields are written into its parent's object, in
-  // its place, instead of as an object under its key; an unset one writes
-  // nothing (or its fields as null, where they say `json_null`). Its fields'
-  // keys must not collide with its parent's.
+  // A singular message field's own fields are written into its parent's
+  // object, in its place, instead of as an object under its key; an unset
+  // one writes nothing. Its fields' keys must not collide with its
+  // parent's.
   bool json_flatten = 3;
   // On an `io.angzarr.v1.UUID` field: the name of the domain layer's
   // newtype holding it (`RunId`), declared once per package, in place of
@@ -76,8 +76,12 @@ message MessageCodegen {
   // `json_tag_key` when it is the arm set.
   string json_tag = 4;
   // When set, the message's JSON object opens with this key holding its
-  // `json_tag` (`{"event": "run.started", ...}`).
+  // `json_tag` (`{"event": "run.started", ...}`), when it is written on its
+  // own (as a oneof's arm, the oneof's key holds it).
   string json_tag_key = 5;
+  // Every field without presence (a scalar, enum, list or map not
+  // `optional`) is written even when it holds its default.
+  bool json_defaults = 6;
 }
 
 extend google.protobuf.MessageOptions {

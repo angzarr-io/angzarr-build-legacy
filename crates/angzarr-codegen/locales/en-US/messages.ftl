@@ -9,6 +9,7 @@ unknown-emit = { $command } emits { $event }, which is not an event of its compo
 unknown-refusal = { $command } refuses { $refusal }, which is not a message of the descriptor set
 unowned-domain = { $policy } names the domain { $domain }, which no aggregate or process manager owns
 unsupported-kind = { $component } is a component of kind { $kind }, which this generator does not emit
+json-flatten = { $message }.{ $field } declares json_flatten, but only a singular message field written as an object can be flattened
 name-taken = { $first } and { $second } both take the name { $name } in the domain layer; rename one
 well-known-type = { $message }.{ $field } is a { $type_name }; only google.protobuf.Timestamp and google.protobuf.Duration are mapped
 enum-zero = { $enum_name }'s zero value is { $value }; name it *_UNSPECIFIED

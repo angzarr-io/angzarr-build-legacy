@@ -4,7 +4,9 @@
 
 use std::path::Path;
 
-use angzarr_build::{BuildError, markup_domain_into, markup_domain_with_into, wire_into};
+use angzarr_build::{
+    BuildError, json_into, markup_domain_into, markup_domain_with_into, wire_into,
+};
 
 use angzarr_test_dir::TestDir;
 
@@ -63,6 +65,30 @@ fn test_markup_domain_with_into_writes_a_layer_per_package_each_at_its_path() {
     }
     let order = std::fs::read_to_string(out.join("shapes.order.v1.domain.rs")).unwrap();
     assert!(order.contains("Vec<crate::catalog::Item>"), "{order}");
+}
+
+/// The JSON of the wire types is written only when asked for, as
+/// `angzarr-json.rs`.
+#[test]
+fn test_json_into_writes_the_json_of_the_wire_types() {
+    let out = TestDir::new(concat!(env!("CARGO_PKG_NAME"), "-json"));
+    wire_into(&out, &["json/v1/json.proto"], &[&fixtures()]).unwrap();
+    assert!(
+        !out.join("angzarr-json.rs").exists(),
+        "wire alone writes no JSON"
+    );
+    json_into(
+        &out,
+        &["json/v1/json.proto"],
+        &[&fixtures()],
+        &[("json.v1", "crate::wire")],
+    )
+    .unwrap();
+    let source = std::fs::read_to_string(out.join("angzarr-json.rs")).unwrap();
+    assert!(
+        source.contains("impl JsonMessage for crate::wire::Plain"),
+        "{source}"
+    );
 }
 
 #[test]

@@ -22,6 +22,9 @@ pub enum ProtoError {
         first: String,
         second: String,
     },
+    /// A field declaring `json_flatten` that is not a singular message
+    /// field of a type written as an object.
+    JsonFlatten { message: String, field: String },
     /// A well-known type the domain layer does not map: every one but
     /// `google.protobuf.Timestamp` and `google.protobuf.Duration`.
     WellKnownType {
@@ -67,6 +70,7 @@ impl Diagnostic for ProtoError {
         match self {
             ProtoError::Descriptors { .. } => code!("descriptors"),
             ProtoError::NameTaken { .. } => code!("name-taken"),
+            ProtoError::JsonFlatten { .. } => code!("json-flatten"),
             ProtoError::WellKnownType { .. } => code!("well-known-type"),
             ProtoError::EnumZero { .. } => code!("enum-zero"),
             ProtoError::ReservedName { .. } => code!("reserved-name"),
@@ -84,6 +88,7 @@ impl Diagnostic for ProtoError {
                 first,
                 second,
             } => texts![name, first, second],
+            E::JsonFlatten { message, field } => texts![message, field],
             E::WellKnownType {
                 message,
                 field,
@@ -116,6 +121,10 @@ pub(super) fn samples() -> Vec<ProtoError> {
             name: text("name"),
             first: text("first"),
             second: text("second"),
+        },
+        E::JsonFlatten {
+            message: text("message"),
+            field: text("field"),
         },
         E::WellKnownType {
             message: text("message"),

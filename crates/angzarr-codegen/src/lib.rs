@@ -10,6 +10,7 @@ mod app;
 mod common;
 mod descriptor;
 mod error;
+mod json;
 mod model;
 mod names;
 mod options;
@@ -26,6 +27,7 @@ pub use app::{
 pub use common::refusal_key;
 pub use descriptor::{Descriptor, descriptors, descriptors_rs};
 pub use error::{AppError, CodegenError, MarkupError, ProtoError, UseError, diagnostic_samples};
+pub use json::json;
 pub use names::{ComponentName, NameKind, component_names};
 pub use warnings::{Warning, warnings};
 
