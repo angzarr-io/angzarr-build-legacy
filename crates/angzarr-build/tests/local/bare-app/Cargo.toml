@@ -15,9 +15,9 @@ publish = false
 # The family's pins, as the other fixtures': angzarr-embedded and the router
 # it names, so the app has one router and one angzarr-proto.
 [dependencies]
-angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "059dd7fe9f8bc297404e4ac51de9efa9098e5698" }
-angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "059dd7fe9f8bc297404e4ac51de9efa9098e5698" }
-angzarr-router = { git = "https://github.com/angzarr-io/angzarr-router", rev = "eb79e0c7b8b864dd2921f129630ecc7e8b134a3e" }
+angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "bce1ff2ed813c72b869bbbfcdb7ba9b426e47812" }
+angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "bce1ff2ed813c72b869bbbfcdb7ba9b426e47812" }
+angzarr-router = { git = "https://github.com/angzarr-io/angzarr-router", rev = "fd7c87b9f5c9148d05d699b229153afed07ab534" }
 prost = "0.14"
 
 [build-dependencies]

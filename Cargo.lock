@@ -49,12 +49,12 @@ dependencies = [
 [[package]]
 name = "angzarr-diagnostic"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=e532d31337e179339b26daa9b11406d8f4ec9a68#e532d31337e179339b26daa9b11406d8f4ec9a68"
+source = "git+https://github.com/angzarr-io/angzarr?rev=3535a54a25e95b57dabbcbaea5f3603b1ac13f5c#3535a54a25e95b57dabbcbaea5f3603b1ac13f5c"
 
 [[package]]
 name = "angzarr-embedded-host-config"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr-embedded?rev=059dd7fe9f8bc297404e4ac51de9efa9098e5698#059dd7fe9f8bc297404e4ac51de9efa9098e5698"
+source = "git+https://github.com/angzarr-io/angzarr-embedded?rev=bce1ff2ed813c72b869bbbfcdb7ba9b426e47812#bce1ff2ed813c72b869bbbfcdb7ba9b426e47812"
 dependencies = [
  "angzarr-yaml",
  "serde",
@@ -63,7 +63,7 @@ dependencies = [
 [[package]]
 name = "angzarr-presentation"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=e532d31337e179339b26daa9b11406d8f4ec9a68#e532d31337e179339b26daa9b11406d8f4ec9a68"
+source = "git+https://github.com/angzarr-io/angzarr?rev=3535a54a25e95b57dabbcbaea5f3603b1ac13f5c#3535a54a25e95b57dabbcbaea5f3603b1ac13f5c"
 dependencies = [
  "angzarr-diagnostic",
  "fluent-bundle",
@@ -77,7 +77,7 @@ dependencies = [
 [[package]]
 name = "angzarr-proto"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=e532d31337e179339b26daa9b11406d8f4ec9a68#e532d31337e179339b26daa9b11406d8f4ec9a68"
+source = "git+https://github.com/angzarr-io/angzarr?rev=3535a54a25e95b57dabbcbaea5f3603b1ac13f5c#3535a54a25e95b57dabbcbaea5f3603b1ac13f5c"
 dependencies = [
  "bytes",
  "prost",
@@ -89,12 +89,12 @@ dependencies = [
 [[package]]
 name = "angzarr-test-dir"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=e532d31337e179339b26daa9b11406d8f4ec9a68#e532d31337e179339b26daa9b11406d8f4ec9a68"
+source = "git+https://github.com/angzarr-io/angzarr?rev=3535a54a25e95b57dabbcbaea5f3603b1ac13f5c#3535a54a25e95b57dabbcbaea5f3603b1ac13f5c"
 
 [[package]]
 name = "angzarr-yaml"
 version = "0.1.0"
-source = "git+https://github.com/angzarr-io/angzarr?rev=e532d31337e179339b26daa9b11406d8f4ec9a68#e532d31337e179339b26daa9b11406d8f4ec9a68"
+source = "git+https://github.com/angzarr-io/angzarr?rev=3535a54a25e95b57dabbcbaea5f3603b1ac13f5c#3535a54a25e95b57dabbcbaea5f3603b1ac13f5c"
 dependencies = [
  "angzarr-diagnostic",
  "serde",
@@ -381,7 +381,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -991,7 +991,7 @@ version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03da047801ff44bb6a4d407d4860c05fd70bb81714e6b2f3812603d5b145b042"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools",
  "log",
  "multimap",
@@ -1102,7 +1102,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1321,7 +1321,7 @@ dependencies = [
  "fastrand",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1331,7 +1331,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1520,7 +1520,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
