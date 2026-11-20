@@ -17,10 +17,10 @@ publish = false
 
 # The family's pins, as the other fixtures'.
 [dependencies]
-angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "cc3c07d8ebbce19b0cc6bb639a9490516a2808fd" }
-angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "cc3c07d8ebbce19b0cc6bb639a9490516a2808fd" }
-angzarr-proto = { git = "https://github.com/angzarr-io/angzarr", rev = "03663846fc7609378739f616e785e88b99ba0a1c" }
-angzarr-router = { git = "https://github.com/angzarr-io/angzarr-router", rev = "5e887e163a2712e35e213f0d79f9755418a7c0df" }
+angzarr-embedded = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "059dd7fe9f8bc297404e4ac51de9efa9098e5698" }
+angzarr-embedded-macros = { git = "https://github.com/angzarr-io/angzarr-embedded", rev = "059dd7fe9f8bc297404e4ac51de9efa9098e5698" }
+angzarr-proto = { git = "https://github.com/angzarr-io/angzarr", rev = "e532d31337e179339b26daa9b11406d8f4ec9a68" }
+angzarr-router = { git = "https://github.com/angzarr-io/angzarr-router", rev = "eb79e0c7b8b864dd2921f129630ecc7e8b134a3e" }
 prost = "0.14"
 prost-types = "0.14"
 

@@ -19,9 +19,9 @@ know angzarr's protos and nothing of any application that uses them.
 Every angzarr pin in `Cargo.toml` is a full commit, and they move together:
 
 - angzarr core (`angzarr-diagnostic`, `angzarr-proto`, `angzarr-test-dir`,
-  and for the tests `angzarr-presentation`): 03663846fc7609378739f616e785e88b99ba0a1c
-- angzarr-router (`angzarr-router`, through the generated code's tests): 5e887e163a2712e35e213f0d79f9755418a7c0df
-- angzarr-embedded (`angzarr-embedded-host-config`): cc3c07d8ebbce19b0cc6bb639a9490516a2808fd
+  and for the tests `angzarr-presentation`): e532d31337e179339b26daa9b11406d8f4ec9a68
+- angzarr-router (`angzarr-router`, through the generated code's tests): eb79e0c7b8b864dd2921f129630ecc7e8b134a3e
+- angzarr-embedded (`angzarr-embedded-host-config`): 059dd7fe9f8bc297404e4ac51de9efa9098e5698
 
 The spec submodule `angzarr-project` is the codegen tier's feature files
 (`crates/angzarr-codegen/tests/spec.rs`); `git submodule update --init`
