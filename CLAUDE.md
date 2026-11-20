@@ -31,6 +31,13 @@ The end-to-end fixtures under `crates/angzarr-build/tests/local/` and
 `crates/angzarr-codegen/tests/golden/app/` are workspaces of their own, with
 their own angzarr-embedded and router pins, moved with the family above
 (the golden manifests' is `angzarr_codegen::ANGZARR_EMBEDDED_REV`).
+The generated manifests also name this repository for the build script, at
+`angzarr_codegen::ANGZARR_BUILD_REV`: a full hash of a commit already on
+main (the slow test `the_angzarr_build_pin_is_an_ancestor_of_this_checkout`
+holds it), so it lags the commit that carries it. Move it, in a later commit,
+to a pushed commit when what the generated `build.rs` calls changes, and at a
+release; `ANGZARR_BLESS=1 cargo test -p angzarr-codegen --test app` rewrites
+the golden manifests.
 `tests/local.rs` builds the apps under `tests/local` with cargo, in one
 shared target directory: `buyin-app` and `kinds-app` (generated layer plus
 components with their bodies written; built and run), `blackjack-app` and

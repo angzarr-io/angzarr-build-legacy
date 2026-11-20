@@ -13,8 +13,9 @@
 mod common;
 
 use angzarr_codegen::{
-    AppError, AppLint, AppSeed, CodegenError, DomainCrate, Exposure, Owner, RetrySeed,
-    ScaffoldFile, Warning, app, app_layer, child_components, lint_app, remote_domains,
+    ANGZARR_BUILD_GIT, ANGZARR_BUILD_REV, AppError, AppLint, AppSeed, CodegenError, DomainCrate,
+    Exposure, Owner, RetrySeed, ScaffoldFile, Warning, app, app_layer, child_components, lint_app,
+    remote_domains,
 };
 use common::*;
 
@@ -1198,4 +1199,49 @@ fn a_host_configs_scaffold_settings_are_the_scaffolds_configuration() {
         angzarr_codegen::host_scaffold(unknown)
     );
     assert_eq!(angzarr_codegen::HOST_CONFIG, "angzarr.yaml");
+}
+
+/// The manifest's build-dependency names the angzarr-build repository, at
+/// the pinned commit: not the CLI's repository, which no longer holds it.
+#[test]
+fn the_default_manifest_pins_angzarr_build_in_its_own_repository() {
+    assert_eq!(
+        ANGZARR_BUILD_GIT,
+        "https://github.com/angzarr-io/angzarr-build"
+    );
+    let files = app(&descriptors(SHOP), SHOP, &seed("shop"), None, None).unwrap();
+    let manifest = &file(&files, "Cargo.toml").source;
+    let expected = format!(
+        "angzarr-build = {{ git = \"{ANGZARR_BUILD_GIT}\", rev = \"{ANGZARR_BUILD_REV}\" }}\n"
+    );
+    assert!(manifest.ends_with(&expected), "{manifest}");
+}
+
+/// A pin is a full commit hash, never a branch or an abbreviation.
+#[test]
+fn the_angzarr_build_pin_is_a_full_commit_hash() {
+    assert_eq!(ANGZARR_BUILD_REV.len(), 40, "{ANGZARR_BUILD_REV}");
+    assert!(
+        ANGZARR_BUILD_REV
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        "{ANGZARR_BUILD_REV}"
+    );
+}
+
+/// The pinned commit is in this repository's history, so a generated
+/// application can fetch it. Needs the full history (a shallow clone cannot
+/// say), so it runs with the slow tests.
+#[test]
+#[ignore = "needs the repository's full history; runs in `just test`'s slow pass"]
+fn the_angzarr_build_pin_is_an_ancestor_of_this_checkout() {
+    let status = std::process::Command::new("git")
+        .args(["merge-base", "--is-ancestor", ANGZARR_BUILD_REV, "HEAD"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .status()
+        .expect("git runs");
+    assert!(
+        status.success(),
+        "{ANGZARR_BUILD_REV} is not an ancestor of HEAD: pin a commit that is pushed to main"
+    );
 }

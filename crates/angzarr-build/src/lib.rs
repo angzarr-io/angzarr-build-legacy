@@ -22,8 +22,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use angzarr_diagnostic::{Arg, Diagnostic, catalog, code};
 
 pub use angzarr_codegen::{
-    ANGZARR_BUILD_GIT, ANGZARR_EMBEDDED_REV, AppLint, AppSeed, DomainCrate, Existing, Exposure,
-    Linted, Notes, PinDrift, ProtoInput, PythonApp, RetrySeed, ScaffoldConfig, Warning,
+    ANGZARR_BUILD_GIT, ANGZARR_BUILD_REV, ANGZARR_EMBEDDED_REV, AppLint, AppSeed, DomainCrate,
+    Existing, Exposure, Linted, Notes, PinDrift, ProtoInput, PythonApp, RetrySeed, ScaffoldConfig,
+    Warning,
 };
 
 /// This crate's en-US messages: its package name, and its catalog, each id

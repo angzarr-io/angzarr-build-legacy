@@ -16,4 +16,4 @@ prost = "0.14"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
-angzarr-build = { git = "https://github.com/angzarr-io/angzarr-cli" }
+angzarr-build = { git = "https://github.com/angzarr-io/angzarr-build", rev = "2e07257111c5103da0d33db0a8cefe484babf464" }

@@ -50,7 +50,14 @@ pub const ANGZARR_EMBEDDED_REV: &str = "bce1ff2ed813c72b869bbbfcdb7ba9b426e47812
 /// Where [`ANGZARR_EMBEDDED_REV`] is fetched from.
 pub const ANGZARR_EMBEDDED_GIT: &str = "https://github.com/angzarr-io/angzarr-embedded";
 /// Where angzarr-build is fetched from when a seed names no other source.
-pub const ANGZARR_BUILD_GIT: &str = "https://github.com/angzarr-io/angzarr-cli";
+pub const ANGZARR_BUILD_GIT: &str = "https://github.com/angzarr-io/angzarr-build";
+/// The angzarr-build commit a generated application's `Cargo.toml` pins for
+/// its build script: a full hash of a commit already on this repository's
+/// main (a test holds it to that), since a commit cannot name itself. A
+/// change to what the generated build script calls moves it, in a later
+/// commit, to a pushed commit that has the change; a release moves it to
+/// the release's commit.
+pub const ANGZARR_BUILD_REV: &str = "2e07257111c5103da0d33db0a8cefe484babf464";
 
 /// From how far a command may reach a domain through the host's listener
 /// (the host config's `expose`); not exposed is the default and is not
@@ -99,7 +106,7 @@ pub struct AppSeed {
     /// `store.in_memory: true`, else the default SQLite file.
     pub in_memory: bool,
     /// The manifest's angzarr-build build-dependency, a TOML value (`{ path
-    /// = ".." }`); `None` is [`ANGZARR_BUILD_GIT`]'s default branch.
+    /// = ".." }`); `None` is [`ANGZARR_BUILD_GIT`] at [`ANGZARR_BUILD_REV`].
     pub angzarr_build: Option<String>,
     /// The library crate whose domain layer the application uses, written
     /// into the manifest (`[package.metadata.angzarr.domain]`); `None`, the
@@ -759,10 +766,9 @@ fn package_name(name: &str) -> String {
 fn manifest(seed: &AppSeed) -> String {
     let embedded =
         format!("{{ git = \"{ANGZARR_EMBEDDED_GIT}\", rev = \"{ANGZARR_EMBEDDED_REV}\" }}");
-    let build = seed
-        .angzarr_build
-        .clone()
-        .unwrap_or_else(|| format!("{{ git = \"{ANGZARR_BUILD_GIT}\" }}"));
+    let build = seed.angzarr_build.clone().unwrap_or_else(|| {
+        format!("{{ git = \"{ANGZARR_BUILD_GIT}\", rev = \"{ANGZARR_BUILD_REV}\" }}")
+    });
     format!(
         "# The manifest of {name} on angzarr-embedded. Written once by `angzarr\n\
          # scaffold app` and yours from then on: add your logic's dependencies.\n\

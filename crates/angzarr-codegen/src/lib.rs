@@ -23,9 +23,10 @@ mod warnings;
 /// what [`app`] writes and [`host_scaffold`] reads.
 pub use angzarr_embedded_host_config::FILE_NAME as HOST_CONFIG;
 pub use app::{
-    ANGZARR_BUILD_GIT, ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV, AppLint, AppSeed, DomainCrate,
-    Exposure, Linted, RetrySeed, app, app_layer, app_lint_samples, child_components, host_scaffold,
-    in_process_components, lint_app, manifest_domain_crate, remote_domains,
+    ANGZARR_BUILD_GIT, ANGZARR_BUILD_REV, ANGZARR_EMBEDDED_GIT, ANGZARR_EMBEDDED_REV, AppLint,
+    AppSeed, DomainCrate, Exposure, Linted, RetrySeed, app, app_layer, app_lint_samples,
+    child_components, host_scaffold, in_process_components, lint_app, manifest_domain_crate,
+    remote_domains,
 };
 pub use common::refusal_key;
 pub use descriptor::{Descriptor, descriptors, descriptors_rs};
